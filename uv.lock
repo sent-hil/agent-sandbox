@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.10"
 
 [[package]]
@@ -9,6 +9,7 @@ source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "rich" },
+    { name = "tomli" },
 ]
 
 [package.dev-dependencies]
@@ -22,6 +23,7 @@ dev = [
 requires-dist = [
     { name = "click", specifier = ">=8.0" },
     { name = "rich", specifier = ">=13.0" },
+    { name = "tomli", specifier = ">=2.3.0" },
 ]
 
 [package.metadata.requires-dev]

@@ -321,13 +321,42 @@ class DockerClient:
         # Run interactively
         subprocess.run(cmd)
 
+    def shell_exists(self, sandbox_name: str, shell: str) -> bool:
+        """Check if a shell exists in the container.
+
+        Args:
+            sandbox_name: The sandbox name.
+            shell: The shell path to check.
+
+        Returns:
+            True if shell exists, False otherwise.
+        """
+        container_name = self.container_name(sandbox_name)
+        cmd = ["docker", "exec", container_name, "test", "-x", shell]
+
+        result = subprocess.run(cmd, capture_output=True)
+        return result.returncode == 0
+
     def exec_shell(self, sandbox_name: str, shell: str = "sh") -> None:
         """Execute an interactive shell in a sandbox container.
 
         Args:
             sandbox_name: The sandbox name.
             shell: The shell to use (default: sh).
+
+        Raises:
+            RuntimeError: If shell doesn't exist in container.
         """
+        # Check if shell exists first
+        if not self.shell_exists(sandbox_name, shell):
+            raise RuntimeError(
+                f"Shell '{shell}' not found in container. "
+                f"Please add it to your .devcontainer/Dockerfile and rebuild the sandbox:\n"
+                f"  1. Add '{shell.split('/')[-1]}' to apt-get install in Dockerfile\n"
+                f"  2. Run: agent-sandbox rm {sandbox_name}\n"
+                f"  3. Run: agent-sandbox connect {sandbox_name}"
+            )
+
         container_name = self.container_name(sandbox_name)
         cmd = ["docker", "exec", "-it", container_name, shell]
 

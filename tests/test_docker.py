@@ -232,3 +232,51 @@ class TestDockerClientGetSandboxName:
 
         result = client.get_sandbox_name_from_container("alice")
         assert result == "alice"
+
+
+class TestDockerClientShellExists:
+    """Tests for DockerClient.shell_exists method."""
+
+    def test_returns_true_when_shell_exists(self, tmp_path):
+        """Should return True when shell exists in container."""
+        client = DockerClient(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            result = client.shell_exists("alice", "/bin/bash")
+
+            assert result is True
+            call_args = mock_run.call_args[0][0]
+            assert call_args == [
+                "docker",
+                "exec",
+                "sandbox-alice",
+                "test",
+                "-x",
+                "/bin/bash",
+            ]
+
+    def test_returns_false_when_shell_not_exists(self, tmp_path):
+        """Should return False when shell doesn't exist in container."""
+        client = DockerClient(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1)
+            result = client.shell_exists("alice", "/usr/bin/fish")
+
+            assert result is False
+
+
+class TestDockerClientExecShell:
+    """Tests for DockerClient.exec_shell method."""
+
+    def test_raises_when_shell_not_exists(self, tmp_path):
+        """Should raise RuntimeError when shell doesn't exist."""
+        client = DockerClient(tmp_path)
+
+        with patch.object(client, "shell_exists", return_value=False):
+            with pytest.raises(RuntimeError) as exc_info:
+                client.exec_shell("alice", "/usr/bin/fish")
+
+            assert "not found in container" in str(exc_info.value)
+            assert "agent-sandbox rm alice" in str(exc_info.value)

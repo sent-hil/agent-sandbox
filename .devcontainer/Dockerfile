@@ -3,7 +3,7 @@ FROM ubuntu:24.04
 # Avoid prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install essential tools
+# Install essential tools and fish shell
 RUN apt-get update && apt-get install -y \
     curl \
     git \
@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     unzip \
     build-essential \
     ca-certificates \
+    fish \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (for Claude Code and other JS tools)
