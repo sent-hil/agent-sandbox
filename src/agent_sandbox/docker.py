@@ -286,30 +286,66 @@ class DockerClient:
         Returns:
             List of container names.
         """
+        if all_namespaces:
+            # Get all sandbox containers
+            cmd = [
+                "docker",
+                "ps",
+                "--filter",
+                f"label={SANDBOX_LABEL}",
+                "--format",
+                "{{.Names}}",
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                return []
+            containers = result.stdout.strip().split("\n")
+            return [c for c in containers if c]
+
+        # For namespace filtering, we need to handle both:
+        # 1. Containers with matching namespace label (new style)
+        # 2. Legacy containers without namespace label but with sandbox dir in this project
+
+        # First get containers with matching namespace label
+        cmd = [
+            "docker",
+            "ps",
+            "--filter",
+            f"label={SANDBOX_LABEL}",
+            "--filter",
+            f"label=agent-sandbox.namespace={self.namespace}",
+            "--format",
+            "{{.Names}}",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        namespaced_containers = []
+        if result.returncode == 0 and result.stdout.strip():
+            namespaced_containers = [c for c in result.stdout.strip().split("\n") if c]
+
+        # Then get legacy containers (no namespace label) and check if they belong here
         cmd = [
             "docker",
             "ps",
             "--filter",
             f"label={SANDBOX_LABEL}",
             "--format",
-            "{{.Names}}",
+            "{{.Label \"agent-sandbox.name\"}}:{{.Names}}",
         ]
-
-        if not all_namespaces:
-            cmd.extend(
-                [
-                    "--filter",
-                    f"label=agent-sandbox.namespace={self.namespace}",
-                ]
-            )
-
         result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0 and result.stdout.strip():
+            sandboxes_dir = self.project_root / ".sandboxes"
+            for line in result.stdout.strip().split("\n"):
+                if not line or ":" not in line:
+                    continue
+                sandbox_name, container_name = line.split(":", 1)
+                # Skip if already in namespaced list
+                if container_name in namespaced_containers:
+                    continue
+                # Check if this sandbox belongs to this project (has a directory here)
+                if sandbox_name and (sandboxes_dir / sandbox_name).exists():
+                    namespaced_containers.append(container_name)
 
-        if result.returncode != 0:
-            return []
-
-        containers = result.stdout.strip().split("\n")
-        return [c for c in containers if c]
+        return namespaced_containers
 
     def get_container_ports(self, sandbox_name: str) -> dict[int, int]:
         """Get port mappings for a sandbox container.
@@ -345,12 +381,28 @@ class DockerClient:
     def get_sandbox_name_from_container(self, container_name: str) -> str:
         """Extract sandbox name from container name.
 
+        Uses the agent-sandbox.name label if available, otherwise falls back
+        to parsing the container name.
+
         Args:
-            container_name: The container name (sandbox-<namespace>-<name>).
+            container_name: The container name.
 
         Returns:
             The sandbox name.
         """
+        # Try to get the name from the label first (most reliable)
+        cmd = [
+            "docker",
+            "inspect",
+            "--format",
+            "{{index .Config.Labels \"agent-sandbox.name\"}}",
+            container_name,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+
+        # Fall back to parsing container name
         from .utils import extract_sandbox_name
 
         return extract_sandbox_name(container_name)

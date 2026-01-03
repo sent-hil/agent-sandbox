@@ -8,7 +8,6 @@ from .docker import DockerClient
 from .git import GitClient
 from .config import get_default_shell
 from .utils import (
-    extract_sandbox_name,
     find_devcontainer_json,
     find_project_root,
     get_devcontainer_build_context,
@@ -212,7 +211,7 @@ class SandboxManager:
         stopped = []
 
         for container in containers:
-            name = extract_sandbox_name(container)
+            name = self._docker.get_sandbox_name_from_container(container)
             self._docker.stop_container(name)
             stopped.append(name)
 
@@ -244,8 +243,8 @@ class SandboxManager:
         sandboxes = []
 
         for container in containers:
-            name = extract_sandbox_name(container)
-            ports = self._docker.get_container_ports(name)
+            # Get sandbox name from container label (more reliable than parsing name)
+            name = self._docker.get_sandbox_name_from_container(container)
             sandbox_path = self._git.sandbox_path(name)
 
             # Handle case where sandbox directory was deleted but container still exists
@@ -253,6 +252,9 @@ class SandboxManager:
                 branch = self._git.get_current_branch(name)
             else:
                 branch = "(orphaned)"
+
+            # Get ports using the sandbox name
+            ports = self._docker.get_container_ports(name)
 
             sandboxes.append(
                 SandboxInfo(

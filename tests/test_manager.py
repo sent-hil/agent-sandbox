@@ -349,6 +349,7 @@ class TestSandboxManagerList:
         manager = SandboxManager(tmp_path)
         manager._docker = MagicMock()
         manager._docker.list_sandbox_containers.return_value = ["sandbox-alice"]
+        manager._docker.get_sandbox_name_from_container.return_value = "alice"
         manager._docker.get_container_ports.return_value = {8000: 8001}
         manager._git = MagicMock()
         manager._git.get_current_branch.return_value = "sandbox/alice"
@@ -397,6 +398,7 @@ class TestSandboxManagerList:
         manager = SandboxManager(tmp_path)
         manager._docker = MagicMock()
         manager._docker.list_sandbox_containers.return_value = ["sandbox-orphaned"]
+        manager._docker.get_sandbox_name_from_container.return_value = "orphaned"
         manager._docker.get_container_ports.return_value = {8000: 8001}
         manager._git = MagicMock()
         manager._git.sandbox_path.return_value = sandbox_path
@@ -448,6 +450,9 @@ class TestSandboxManagerList:
             "sandbox-valid",
             "sandbox-orphaned",
         ]
+        manager._docker.get_sandbox_name_from_container.side_effect = lambda c: (
+            "valid" if "valid" in c else "orphaned"
+        )
         manager._docker.get_container_ports.return_value = {8000: 8001}
         manager._git = MagicMock()
         manager._git.sandbox_path.side_effect = lambda name: (
