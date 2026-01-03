@@ -315,7 +315,7 @@ class TestSandboxManagerRemove:
 
 
 class TestSandboxManagerList:
-    """Tests for list method."""
+    """Tests for ps method."""
 
     def test_list_returns_sandbox_info(self, tmp_path):
         """Should return list of SandboxInfo."""
