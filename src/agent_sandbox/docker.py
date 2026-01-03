@@ -4,7 +4,10 @@ import os
 import re
 import subprocess
 from pathlib import Path
+from typing import Callable, Optional
 
+# Type alias for progress callback
+ProgressCallback = Callable[[str], None]
 
 # Label used to identify sandbox containers
 SANDBOX_LABEL = "agent-sandbox.managed=true"
@@ -137,6 +140,7 @@ class DockerClient:
         workspace_path: Path,
         workdir: str,
         ports: dict[int, int],
+        on_progress: Optional[ProgressCallback] = None,
     ) -> None:
         """Build (if needed) and start a container for a sandbox.
         
@@ -148,22 +152,30 @@ class DockerClient:
             workspace_path: Host path to mount as workspace.
             workdir: Working directory inside container.
             ports: Dict mapping container_port -> host_port.
+            on_progress: Optional callback for progress updates.
             
         Raises:
             RuntimeError: If build or run fails.
         """
+        def progress(msg: str) -> None:
+            if on_progress:
+                on_progress(msg)
+        
         # Determine which image to use
         if dockerfile:
             # Build from Dockerfile
+            progress("Building container image...")
             self.build_image(sandbox_name, context_path, dockerfile)
             run_image = self.image_name(sandbox_name)
         elif image:
             # Use specified image
+            progress(f"Using image {image}...")
             run_image = image
         else:
             raise RuntimeError("No Dockerfile or image specified in devcontainer.json")
         
         # Run the container
+        progress("Starting container...")
         self.run_container(
             sandbox_name=sandbox_name,
             image=run_image,

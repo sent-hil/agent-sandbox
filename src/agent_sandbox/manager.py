@@ -2,7 +2,10 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
+
+# Type alias for progress callback
+ProgressCallback = Callable[[str], None]
 
 from .docker import DockerClient
 from .git import GitClient
@@ -111,17 +114,28 @@ class SandboxManager:
         """
         return {port: port + offset for port in self._base_ports}
     
-    def start(self, name: str, branch: Optional[str] = None) -> SandboxInfo:
+    def start(
+        self,
+        name: str,
+        branch: Optional[str] = None,
+        on_progress: Optional[ProgressCallback] = None,
+    ) -> SandboxInfo:
         """Start a new sandbox.
         
         Args:
             name: The sandbox name.
             branch: Optional branch name. Creates sandbox/<name> if not provided.
+            on_progress: Optional callback for progress updates.
             
         Returns:
             SandboxInfo with details about the started sandbox.
         """
+        def progress(msg: str) -> None:
+            if on_progress:
+                on_progress(msg)
+        
         # Check if already running
+        progress("Checking for existing sandbox...")
         if self._docker.container_exists(name):
             # Return existing sandbox info
             ports = self._docker.get_container_ports(name)
@@ -136,13 +150,15 @@ class SandboxManager:
             )
         
         # Create worktree
+        progress("Creating git worktree...")
         worktree_path = self._git.create_worktree(name, branch)
         
         # Calculate port offset and build port mapping
         offset = self._get_next_port_offset()
         ports = self._build_port_mapping(offset)
         
-        # Start container
+        # Start container (this includes building if needed)
+        progress("Building container image...")
         self._docker.start_container(
             sandbox_name=name,
             context_path=self._context_path,
@@ -151,6 +167,7 @@ class SandboxManager:
             workspace_path=worktree_path,
             workdir=self._workdir,
             ports=ports,
+            on_progress=on_progress,
         )
         
         # Get actual branch name

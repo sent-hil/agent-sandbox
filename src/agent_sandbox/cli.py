@@ -81,9 +81,12 @@ def start(name: str, branch: str | None):
     manager = get_manager(auto_init=True)
     
     try:
-        info = manager.start(name, branch)
+        with console.status(f"[bold blue]Starting sandbox '{name}'...", spinner="dots") as status:
+            def on_progress(step: str):
+                status.update(f"[bold blue]{step}")
+            
+            info = manager.start(name, branch, on_progress=on_progress)
         
-        console.print()
         console.print(f"[green]Sandbox '{name}' started![/green]")
         console.print()
         console.print(f"  [bold]Worktree:[/bold]  {info.worktree_path}")
@@ -108,8 +111,8 @@ def stop(name: str):
     """Stop a sandbox."""
     manager = get_manager()
     
-    console.print(f"Stopping sandbox '{name}'...")
-    manager.stop(name)
+    with console.status(f"[bold blue]Stopping sandbox '{name}'...", spinner="dots"):
+        manager.stop(name)
     console.print(f"[green]Sandbox '{name}' stopped.[/green]")
 
 
@@ -118,12 +121,12 @@ def stopall():
     """Stop all running sandboxes."""
     manager = get_manager()
     
-    console.print("Stopping all sandboxes...")
-    stopped = manager.stop_all()
+    with console.status("[bold blue]Stopping all sandboxes...", spinner="dots"):
+        stopped = manager.stop_all()
     
     if stopped:
         for name in stopped:
-            console.print(f"  Stopped: {name}")
+            console.print(f"  [dim]Stopped:[/dim] {name}")
         console.print(f"[green]All sandboxes stopped.[/green]")
     else:
         console.print("No sandboxes were running.")
@@ -135,8 +138,8 @@ def rm(name: str):
     """Remove a sandbox and its worktree."""
     manager = get_manager()
     
-    console.print(f"Removing sandbox '{name}'...")
-    manager.remove(name)
+    with console.status(f"[bold blue]Removing sandbox '{name}'...", spinner="dots"):
+        manager.remove(name)
     console.print(f"[green]Sandbox '{name}' removed.[/green]")
 
 
