@@ -87,3 +87,15 @@ class TestCreateDevcontainer:
 
         dockerfile = devcontainer_dir / "Dockerfile"
         assert "old content" not in dockerfile.read_text()
+
+    def test_creates_agents_md(self, tmp_path):
+        """Should create AGENTS.md with sandbox instructions."""
+        create_devcontainer(tmp_path)
+
+        agents_md = tmp_path / ".devcontainer" / "AGENTS.md"
+        assert agents_md.exists()
+
+        content = agents_md.read_text()
+        assert "git push" in content
+        assert "sandbox" in content.lower()
+        assert "agent-sandbox merge" in content

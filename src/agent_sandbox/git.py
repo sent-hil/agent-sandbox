@@ -126,6 +126,14 @@ class GitClient:
             capture_output=True,
         )
 
+        # Copy AGENTS.md from .devcontainer if it exists
+        devcontainer_agents = self.project_root / ".devcontainer" / "AGENTS.md"
+        if devcontainer_agents.exists():
+            sandbox_agents = sandbox_path / "AGENTS.md"
+            # Only copy if sandbox doesn't already have one
+            if not sandbox_agents.exists():
+                shutil.copy(devcontainer_agents, sandbox_agents)
+
         return sandbox_path
 
     def remove_sandbox(self, name: str) -> None:
@@ -168,13 +176,17 @@ class GitClient:
         Fetches from the git server and merges the sandbox branch.
 
         Args:
-            name: The sandbox name.
+            name: The sandbox name (or full branch name like 'sandbox/name').
 
         Returns:
             Tuple of (success, message).
             If success is False, there may be conflicts to resolve.
         """
-        branch = f"sandbox/{name}"
+        # Handle both 'name' and 'sandbox/name' formats
+        if name.startswith("sandbox/"):
+            branch = name
+        else:
+            branch = f"sandbox/{name}"
 
         # Fetch from git server to get the sandbox's pushed commits
         result = subprocess.run(

@@ -77,6 +77,42 @@ DEFAULT_DEVCONTAINER_JSON = """{
 }
 """
 
+# Instructions for AI agents working in the sandbox
+SANDBOX_AGENTS_MD = """# Sandbox Environment
+
+You are running inside an isolated sandbox container. This environment has its own git repository that is separate from the host.
+
+## Git Workflow
+
+### Committing Changes
+Commit your changes as usual:
+```bash
+git add .
+git commit -m "your commit message"
+```
+
+### Pushing Changes
+After committing, push your changes so they can be merged on the host:
+```bash
+git push origin HEAD
+```
+
+This pushes to the sandbox's git server at `/repo-origin`. The host can then merge your changes.
+
+### Important Notes
+- Your branch name follows the pattern `sandbox/<sandbox-name>`
+- Always push before asking the user to merge your changes
+- The remote `origin` points to `/repo-origin` (the shared git server)
+
+## Merging on Host
+After you push, tell the user to run on the host:
+```bash
+agent-sandbox merge <sandbox-name>
+```
+
+This fetches your commits and merges them into the host's current branch.
+"""
+
 
 def find_git_root(start_path: Optional[Path] = None) -> Optional[Path]:
     """Find the root of the git repository.
@@ -131,3 +167,7 @@ def create_devcontainer(
     )
     devcontainer_json_path = devcontainer_dir / "devcontainer.json"
     devcontainer_json_path.write_text(devcontainer_json)
+
+    # Create AGENTS.md with sandbox instructions
+    agents_md_path = devcontainer_dir / "AGENTS.md"
+    agents_md_path.write_text(SANDBOX_AGENTS_MD.strip() + "\n")

@@ -104,6 +104,58 @@ class TestGitClientCreateSandbox:
             assert result == sandbox_path
             mock_run.assert_not_called()
 
+    def test_copies_agents_md_from_devcontainer(self, tmp_path):
+        """Should copy AGENTS.md from .devcontainer to sandbox."""
+        client = GitClient(tmp_path)
+        client.git_server_path.mkdir(parents=True)
+
+        # Create .devcontainer/AGENTS.md
+        devcontainer_dir = tmp_path / ".devcontainer"
+        devcontainer_dir.mkdir()
+        agents_content = "# Sandbox Instructions\nPush with git push origin HEAD"
+        (devcontainer_dir / "AGENTS.md").write_text(agents_content)
+
+        sandbox_path = tmp_path / ".sandboxes" / "alice"
+
+        def mock_run_side_effect(cmd, **kwargs):
+            # Simulate git clone creating the directory
+            if "clone" in cmd:
+                sandbox_path.mkdir(parents=True, exist_ok=True)
+            return MagicMock(returncode=0)
+
+        with patch("subprocess.run", side_effect=mock_run_side_effect):
+            client.create_sandbox("alice")
+
+        # AGENTS.md should be copied
+        sandbox_agents = sandbox_path / "AGENTS.md"
+        assert sandbox_agents.exists()
+        assert sandbox_agents.read_text() == agents_content
+
+    def test_does_not_overwrite_existing_agents_md(self, tmp_path):
+        """Should not overwrite AGENTS.md if sandbox already has one."""
+        client = GitClient(tmp_path)
+        client.git_server_path.mkdir(parents=True)
+
+        # Create .devcontainer/AGENTS.md
+        devcontainer_dir = tmp_path / ".devcontainer"
+        devcontainer_dir.mkdir()
+        (devcontainer_dir / "AGENTS.md").write_text("new content")
+
+        sandbox_path = tmp_path / ".sandboxes" / "alice"
+
+        def mock_run_side_effect(cmd, **kwargs):
+            # Simulate git clone creating the directory with existing AGENTS.md
+            if "clone" in cmd:
+                sandbox_path.mkdir(parents=True, exist_ok=True)
+                (sandbox_path / "AGENTS.md").write_text("existing content")
+            return MagicMock(returncode=0)
+
+        with patch("subprocess.run", side_effect=mock_run_side_effect):
+            client.create_sandbox("alice")
+
+        # Should keep existing content
+        assert (sandbox_path / "AGENTS.md").read_text() == "existing content"
+
     def test_sets_origin_to_container_path(self, tmp_path):
         """Should set origin URL to container git server path."""
         client = GitClient(tmp_path)
@@ -229,3 +281,38 @@ class TestGitClientMergeSandbox:
 
             assert success is False
             assert "conflict" in message.lower()
+
+    def test_merge_with_sandbox_prefix(self, tmp_path):
+        """Should handle branch name with sandbox/ prefix.
+
+        Regression test: Users may pass 'sandbox/name' instead of just 'name'.
+        Previously this would result in 'sandbox/sandbox/name'.
+        """
+        client = GitClient(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+            success, message = client.merge_sandbox("sandbox/list-rename")
+
+            assert success is True
+            # Verify the fetch was called with correct branch (not double-prefixed)
+            fetch_call = mock_run.call_args_list[0]
+            fetch_cmd = fetch_call[0][0]
+            assert "sandbox/list-rename" in fetch_cmd
+            assert "sandbox/sandbox/" not in " ".join(fetch_cmd)
+
+    def test_merge_without_sandbox_prefix(self, tmp_path):
+        """Should add sandbox/ prefix when not provided."""
+        client = GitClient(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+            success, message = client.merge_sandbox("alice")
+
+            assert success is True
+            # Verify the fetch was called with sandbox/alice
+            fetch_call = mock_run.call_args_list[0]
+            fetch_cmd = fetch_call[0][0]
+            assert "sandbox/alice" in fetch_cmd
