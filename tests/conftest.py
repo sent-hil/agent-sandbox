@@ -1,6 +1,5 @@
 """Shared test fixtures and configuration."""
 
-import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -14,7 +13,7 @@ def temp_project_dir():
     """Create a temporary directory with a devcontainer.json file."""
     with tempfile.TemporaryDirectory() as tmpdir:
         project_dir = Path(tmpdir)
-        
+
         # Create .devcontainer directory and devcontainer.json
         devcontainer_dir = project_dir / ".devcontainer"
         devcontainer_dir.mkdir()
@@ -28,12 +27,14 @@ def temp_project_dir():
     "workspaceFolder": "/workspaces/project"
 }"""
         (devcontainer_dir / "devcontainer.json").write_text(devcontainer_content)
-        
+
         # Create a minimal Dockerfile
         (project_dir / "Dockerfile").write_text("FROM alpine\nCMD sleep infinity")
-        
+
         # Initialize a git repo
-        subprocess.run(["git", "init"], cwd=project_dir, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "init"], cwd=project_dir, capture_output=True, check=True
+        )
         subprocess.run(
             ["git", "config", "user.email", "test@test.com"],
             cwd=project_dir,
@@ -46,17 +47,19 @@ def temp_project_dir():
             capture_output=True,
             check=True,
         )
-        
+
         # Create a dummy file and commit
         (project_dir / "README.md").write_text("# Test Project")
-        subprocess.run(["git", "add", "."], cwd=project_dir, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=project_dir, capture_output=True, check=True
+        )
         subprocess.run(
             ["git", "commit", "-m", "Initial commit"],
             cwd=project_dir,
             capture_output=True,
             check=True,
         )
-        
+
         yield project_dir
 
 

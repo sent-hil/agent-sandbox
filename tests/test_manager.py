@@ -1,7 +1,7 @@
 """Tests for SandboxManager."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -18,16 +18,25 @@ class TestSandboxManager:
         devcontainer = devcontainer_dir / "devcontainer.json"
         devcontainer.write_text('{"forwardPorts": [8000]}')
         (devcontainer_dir / "Dockerfile").write_text("FROM alpine")
-        
+
         # Initialize git repo
         import subprocess
+
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True
+        )
         (tmp_path / "README.md").write_text("# Test")
         subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True)
-        
+        subprocess.run(
+            ["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True
+        )
+
         manager = SandboxManager(tmp_path)
         assert manager.project_root == tmp_path
 
@@ -38,19 +47,28 @@ class TestSandboxManager:
         devcontainer = devcontainer_dir / "devcontainer.json"
         devcontainer.write_text('{"forwardPorts": [8000]}')
         (devcontainer_dir / "Dockerfile").write_text("FROM alpine")
-        
+
         subdir = tmp_path / "src" / "app"
         subdir.mkdir(parents=True)
-        
+
         # Initialize git repo
         import subprocess
+
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True
+        )
         (tmp_path / "README.md").write_text("# Test")
         subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True)
-        
+        subprocess.run(
+            ["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True
+        )
+
         manager = SandboxManager(subdir)
         assert manager.project_root == tmp_path
 
@@ -70,19 +88,28 @@ class TestSandboxManagerPortCalculation:
         devcontainer = devcontainer_dir / "devcontainer.json"
         devcontainer.write_text('{"forwardPorts": [8000]}')
         (devcontainer_dir / "Dockerfile").write_text("FROM alpine")
-        
+
         import subprocess
+
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True
+        )
         (tmp_path / "README.md").write_text("# Test")
         subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True)
-        
+        subprocess.run(
+            ["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True
+        )
+
         manager = SandboxManager(tmp_path)
         manager._docker = MagicMock()
         manager._docker.list_sandbox_containers.return_value = []
-        
+
         offset = manager._get_next_port_offset()
         assert offset == 0
 
@@ -93,24 +120,36 @@ class TestSandboxManagerPortCalculation:
         devcontainer = devcontainer_dir / "devcontainer.json"
         devcontainer.write_text('{"forwardPorts": [8000]}')
         (devcontainer_dir / "Dockerfile").write_text("FROM alpine")
-        
+
         import subprocess
+
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True
+        )
         (tmp_path / "README.md").write_text("# Test")
         subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True)
-        
+        subprocess.run(
+            ["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True
+        )
+
         manager = SandboxManager(tmp_path)
         manager._docker = MagicMock()
-        manager._docker.list_sandbox_containers.return_value = ["sandbox-alice", "sandbox-bob"]
+        manager._docker.list_sandbox_containers.return_value = [
+            "sandbox-alice",
+            "sandbox-bob",
+        ]
         manager._docker.get_sandbox_name_from_container.side_effect = ["alice", "bob"]
         manager._docker.get_container_ports.side_effect = [
             {8000: 8000},  # alice has offset 0
             {8000: 8001},  # bob has offset 1
         ]
-        
+
         offset = manager._get_next_port_offset()
         assert offset == 2
 
@@ -125,15 +164,24 @@ class TestSandboxManagerStart:
         devcontainer = devcontainer_dir / "devcontainer.json"
         devcontainer.write_text('{"forwardPorts": [8000]}')
         (devcontainer_dir / "Dockerfile").write_text("FROM alpine")
-        
+
         import subprocess
+
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True
+        )
         (tmp_path / "README.md").write_text("# Test")
         subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True)
-        
+        subprocess.run(
+            ["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True
+        )
+
         manager = SandboxManager(tmp_path)
         manager._docker = MagicMock()
         manager._docker.list_sandbox_containers.return_value = []
@@ -141,9 +189,9 @@ class TestSandboxManagerStart:
         manager._git = MagicMock()
         manager._git.create_worktree.return_value = tmp_path / ".worktrees" / "alice"
         manager._git.get_current_branch.return_value = "sandbox/alice"
-        
+
         result = manager.start("alice")
-        
+
         assert result.name == "alice"
         assert result.ports == {8000: 8000}
         manager._git.create_worktree.assert_called_once_with("alice", None)
@@ -156,15 +204,24 @@ class TestSandboxManagerStart:
         devcontainer = devcontainer_dir / "devcontainer.json"
         devcontainer.write_text('{"forwardPorts": [8000]}')
         (devcontainer_dir / "Dockerfile").write_text("FROM alpine")
-        
+
         import subprocess
+
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True
+        )
         (tmp_path / "README.md").write_text("# Test")
         subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True)
-        
+        subprocess.run(
+            ["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True
+        )
+
         manager = SandboxManager(tmp_path)
         manager._docker = MagicMock()
         manager._docker.container_exists.return_value = True
@@ -172,9 +229,9 @@ class TestSandboxManagerStart:
         manager._git = MagicMock()
         manager._git.get_current_branch.return_value = "sandbox/alice"
         manager._git.worktree_path.return_value = tmp_path / ".worktrees" / "alice"
-        
+
         result = manager.start("alice")
-        
+
         # Should not call start_container since already running
         manager._docker.start_container.assert_not_called()
         assert result.name == "alice"
@@ -190,20 +247,29 @@ class TestSandboxManagerStop:
         devcontainer = devcontainer_dir / "devcontainer.json"
         devcontainer.write_text('{"forwardPorts": [8000]}')
         (devcontainer_dir / "Dockerfile").write_text("FROM alpine")
-        
+
         import subprocess
+
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True
+        )
         (tmp_path / "README.md").write_text("# Test")
         subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True)
-        
+        subprocess.run(
+            ["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True
+        )
+
         manager = SandboxManager(tmp_path)
         manager._docker = MagicMock()
-        
+
         manager.stop("alice")
-        
+
         manager._docker.stop_container.assert_called_once_with("alice")
 
 
@@ -217,21 +283,30 @@ class TestSandboxManagerRemove:
         devcontainer = devcontainer_dir / "devcontainer.json"
         devcontainer.write_text('{"forwardPorts": [8000]}')
         (devcontainer_dir / "Dockerfile").write_text("FROM alpine")
-        
+
         import subprocess
+
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True
+        )
         (tmp_path / "README.md").write_text("# Test")
         subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True)
-        
+        subprocess.run(
+            ["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True
+        )
+
         manager = SandboxManager(tmp_path)
         manager._docker = MagicMock()
         manager._git = MagicMock()
-        
+
         manager.remove("alice")
-        
+
         manager._docker.stop_container.assert_called_once_with("alice")
         manager._docker.remove_container.assert_called_once_with("alice")
         manager._git.remove_worktree.assert_called_once_with("alice")
@@ -247,15 +322,24 @@ class TestSandboxManagerList:
         devcontainer = devcontainer_dir / "devcontainer.json"
         devcontainer.write_text('{"forwardPorts": [8000]}')
         (devcontainer_dir / "Dockerfile").write_text("FROM alpine")
-        
+
         import subprocess
+
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True
+        )
         (tmp_path / "README.md").write_text("# Test")
         subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True)
-        
+        subprocess.run(
+            ["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True
+        )
+
         manager = SandboxManager(tmp_path)
         manager._docker = MagicMock()
         manager._docker.list_sandbox_containers.return_value = ["sandbox-alice"]
@@ -263,9 +347,9 @@ class TestSandboxManagerList:
         manager._git = MagicMock()
         manager._git.get_current_branch.return_value = "sandbox/alice"
         manager._git.worktree_path.return_value = tmp_path / ".worktrees" / "alice"
-        
+
         result = manager.list()
-        
+
         assert len(result) == 1
         assert result[0].name == "alice"
         assert result[0].branch == "sandbox/alice"
@@ -283,7 +367,7 @@ class TestSandboxInfo:
             ports={8000: 8001, 5173: 5174},
             worktree_path=Path("/tmp/.worktrees/alice"),
         )
-        
+
         assert info.name == "alice"
         assert info.branch == "sandbox/alice"
         assert info.ports == {8000: 8001, 5173: 5174}

@@ -2,7 +2,6 @@
 
 import subprocess
 import time
-from pathlib import Path
 
 import pytest
 
@@ -19,38 +18,38 @@ class TestFullWorkflow:
         """Test complete lifecycle: start -> list -> stop -> remove."""
         manager = SandboxManager(e2e_project_dir)
         sandbox_name = "e2e-test"
-        
+
         try:
             # Start sandbox
             info = manager.start(sandbox_name)
-            
+
             assert info.name == sandbox_name
             assert info.branch == f"sandbox/{sandbox_name}"
             assert 8000 in info.ports
             assert info.worktree_path.exists()
-            
+
             # Wait for container to be ready
             time.sleep(2)
-            
+
             # List sandboxes
             sandboxes = manager.list()
             assert len(sandboxes) >= 1
             names = [s.name for s in sandboxes]
             assert sandbox_name in names
-            
+
             # Check ports
             ports = manager.ports(sandbox_name)
             assert 8000 in ports
-            
+
             # Stop sandbox
             manager.stop(sandbox_name)
-            
+
             # Verify stopped (container should not be running)
             time.sleep(1)
             sandboxes_after_stop = manager.list()
             names_after_stop = [s.name for s in sandboxes_after_stop]
             assert sandbox_name not in names_after_stop
-            
+
         finally:
             # Always cleanup
             try:
@@ -63,7 +62,7 @@ class TestFullWorkflow:
         manager = SandboxManager(e2e_project_dir)
         sandbox_name = "e2e-branch-test"
         branch_name = "test-feature"
-        
+
         try:
             # Create a branch first
             subprocess.run(
@@ -72,13 +71,13 @@ class TestFullWorkflow:
                 check=True,
                 capture_output=True,
             )
-            
+
             # Start sandbox with that branch
             info = manager.start(sandbox_name, branch=branch_name)
-            
+
             assert info.name == sandbox_name
             assert info.branch == branch_name
-            
+
         finally:
             # Cleanup
             try:
@@ -96,22 +95,22 @@ class TestFullWorkflow:
         manager = SandboxManager(e2e_project_dir)
         sandbox1 = "e2e-multi-1"
         sandbox2 = "e2e-multi-2"
-        
+
         try:
             # Start first sandbox
             info1 = manager.start(sandbox1)
             port1 = info1.ports[8000]
-            
+
             # Wait a moment before starting second
             time.sleep(2)
-            
+
             # Start second sandbox
             info2 = manager.start(sandbox2)
             port2 = info2.ports[8000]
-            
+
             # Ports should be different
             assert port1 != port2
-            
+
         finally:
             # Cleanup
             for name in [sandbox1, sandbox2]:

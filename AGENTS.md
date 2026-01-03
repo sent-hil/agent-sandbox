@@ -34,6 +34,20 @@ uv tool install .
 uv cache clean && uv tool install . --force
 ```
 
+### Linting & Formatting
+Run before committing:
+
+```bash
+# Check for linting errors
+uv run ruff check src/ tests/
+
+# Auto-fix linting errors
+uv run ruff check --fix src/ tests/
+
+# Format code
+uv run ruff format src/ tests/
+```
+
 ### Running Tests
 
 ```bash
@@ -64,24 +78,7 @@ uv run pytest tests/ -v
 
 ## Code Style Guidelines
 
-### Imports
-Order imports in three groups separated by blank lines:
-1. Standard library imports
-2. Third-party imports
-3. Local imports
-
-```python
-import os
-import subprocess
-from pathlib import Path
-from typing import Callable, Optional
-
-import click
-from rich.console import Console
-
-from .docker import DockerClient
-from .utils import find_project_root
-```
+Code style is enforced by `ruff`. Run `uv run ruff check --fix` and `uv run ruff format` before committing.
 
 ### Type Hints
 - Always use type hints for function parameters and return values

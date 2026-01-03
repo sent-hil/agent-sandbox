@@ -22,6 +22,7 @@ packages = ["src/agent_sandbox"]
 dev = [
     "pytest>=8.0",
     "pytest-mock>=3.0",
+    "ruff>=0.14.10",
 ]
 
 [tool.pytest.ini_options]

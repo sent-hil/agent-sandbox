@@ -1,11 +1,10 @@
 """Tests for Docker client."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent_sandbox.docker import DockerClient, SANDBOX_LABEL
+from agent_sandbox.docker import DockerClient
 
 
 class TestDockerClient:
@@ -35,12 +34,12 @@ class TestDockerClientBuildImage:
         client = DockerClient(tmp_path)
         context = tmp_path / "context"
         context.mkdir()
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            
+
             client.build_image("alice", context, "Dockerfile")
-            
+
             call_args = mock_run.call_args[0][0]
             assert "docker" in call_args
             assert "build" in call_args
@@ -50,10 +49,10 @@ class TestDockerClientBuildImage:
     def test_raises_on_build_failure(self, tmp_path):
         """Should raise RuntimeError on build failure."""
         client = DockerClient(tmp_path)
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stderr="build error")
-            
+
             with pytest.raises(RuntimeError, match="docker build failed"):
                 client.build_image("alice", tmp_path, "Dockerfile")
 
@@ -66,10 +65,10 @@ class TestDockerClientRunContainer:
         client = DockerClient(tmp_path)
         workspace = tmp_path / "workspace"
         workspace.mkdir()
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            
+
             client.run_container(
                 sandbox_name="alice",
                 image="sandbox-alice:latest",
@@ -77,22 +76,22 @@ class TestDockerClientRunContainer:
                 workdir="/workspaces/project",
                 ports={8000: 8001, 5173: 5174},
             )
-            
+
             call_args = mock_run.call_args[0][0]
             assert "docker" in call_args
             assert "run" in call_args
             assert "-d" in call_args
             assert "--name" in call_args
             assert "sandbox-alice" in call_args
-            assert f"--label" in call_args
+            assert "--label" in call_args
 
     def test_raises_on_run_failure(self, tmp_path):
         """Should raise RuntimeError on run failure."""
         client = DockerClient(tmp_path)
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stderr="run error")
-            
+
             with pytest.raises(RuntimeError, match="docker run failed"):
                 client.run_container(
                     sandbox_name="alice",
@@ -109,23 +108,20 @@ class TestDockerClientContainerExists:
     def test_returns_true_when_exists(self, tmp_path):
         """Should return True when container is running."""
         client = DockerClient(tmp_path)
-        
+
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="sandbox-alice\n"
-            )
-            
+            mock_run.return_value = MagicMock(returncode=0, stdout="sandbox-alice\n")
+
             result = client.container_exists("alice")
             assert result is True
 
     def test_returns_false_when_not_exists(self, tmp_path):
         """Should return False when container not running."""
         client = DockerClient(tmp_path)
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="")
-            
+
             result = client.container_exists("alice")
             assert result is False
 
@@ -136,23 +132,22 @@ class TestDockerClientListContainers:
     def test_lists_containers(self, tmp_path):
         """Should list running sandbox containers."""
         client = DockerClient(tmp_path)
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="sandbox-alice\nsandbox-bob\n"
+                returncode=0, stdout="sandbox-alice\nsandbox-bob\n"
             )
-            
+
             result = client.list_sandbox_containers()
             assert result == ["sandbox-alice", "sandbox-bob"]
 
     def test_returns_empty_on_no_containers(self, tmp_path):
         """Should return empty list when no containers."""
         client = DockerClient(tmp_path)
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="")
-            
+
             result = client.list_sandbox_containers()
             assert result == []
 
@@ -163,23 +158,23 @@ class TestDockerClientGetContainerPorts:
     def test_gets_container_ports(self, tmp_path):
         """Should get port mappings for a container."""
         client = DockerClient(tmp_path)
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
-                stdout="8000/tcp -> 0.0.0.0:8001\n5173/tcp -> 0.0.0.0:5174\n"
+                stdout="8000/tcp -> 0.0.0.0:8001\n5173/tcp -> 0.0.0.0:5174\n",
             )
-            
+
             result = client.get_container_ports("alice")
             assert result == {8000: 8001, 5173: 5174}
 
     def test_returns_empty_on_no_ports(self, tmp_path):
         """Should return empty dict when no port mappings."""
         client = DockerClient(tmp_path)
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="")
-            
+
             result = client.get_container_ports("alice")
             assert result == {}
 
@@ -190,12 +185,12 @@ class TestDockerClientStopContainer:
     def test_stops_container(self, tmp_path):
         """Should stop container."""
         client = DockerClient(tmp_path)
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            
+
             client.stop_container("alice")
-            
+
             call_args = mock_run.call_args[0][0]
             assert "docker" in call_args
             assert "stop" in call_args
@@ -208,12 +203,12 @@ class TestDockerClientRemoveContainer:
     def test_removes_container(self, tmp_path):
         """Should remove container."""
         client = DockerClient(tmp_path)
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            
+
             client.remove_container("alice")
-            
+
             call_args = mock_run.call_args[0][0]
             assert "docker" in call_args
             assert "rm" in call_args
@@ -227,13 +222,13 @@ class TestDockerClientGetSandboxName:
     def test_extracts_name(self, tmp_path):
         """Should extract sandbox name from container name."""
         client = DockerClient(tmp_path)
-        
+
         result = client.get_sandbox_name_from_container("sandbox-alice")
         assert result == "alice"
 
     def test_handles_no_prefix(self, tmp_path):
         """Should return as-is if no prefix."""
         client = DockerClient(tmp_path)
-        
+
         result = client.get_sandbox_name_from_container("alice")
         assert result == "alice"

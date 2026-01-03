@@ -1,0 +1,14 @@
+{
+    "name": "Agent Sandbox",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "forwardPorts": [],
+    "workspaceFolder": "/workspaces/agent-sandbox",
+    "remoteUser": "dev",
+    "customizations": {
+        "vscode": {
+            "extensions": []
+        }
+    }
+}

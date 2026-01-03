@@ -3,7 +3,6 @@
 import json
 from pathlib import Path
 
-import pytest
 
 from agent_sandbox.utils import (
     find_project_root,
@@ -25,7 +24,7 @@ class TestFindProjectRoot:
         devcontainer_dir = tmp_path / ".devcontainer"
         devcontainer_dir.mkdir()
         (devcontainer_dir / "devcontainer.json").write_text("{}")
-        
+
         subdir = tmp_path / "src" / "app"
         subdir.mkdir(parents=True)
 
@@ -104,25 +103,25 @@ class TestParseDevcontainerJson:
     def test_strips_single_line_comments(self, tmp_path):
         """Should handle JSON with single-line comments."""
         devcontainer = tmp_path / "devcontainer.json"
-        devcontainer.write_text('''
+        devcontainer.write_text("""
 {
     // This is a comment
     "name": "test"
 }
-''')
+""")
         result = parse_devcontainer_json(devcontainer)
         assert result == {"name": "test"}
 
     def test_strips_multi_line_comments(self, tmp_path):
         """Should handle JSON with multi-line comments."""
         devcontainer = tmp_path / "devcontainer.json"
-        devcontainer.write_text('''
+        devcontainer.write_text("""
 {
     /* This is a
        multi-line comment */
     "name": "test"
 }
-''')
+""")
         result = parse_devcontainer_json(devcontainer)
         assert result == {"name": "test"}
 
@@ -171,12 +170,9 @@ class TestGetDevcontainerBuildContext:
         devcontainer_dir = tmp_path / ".devcontainer"
         devcontainer_dir.mkdir()
         devcontainer = devcontainer_dir / "devcontainer.json"
-        devcontainer.write_text(json.dumps({
-            "build": {
-                "context": "..",
-                "dockerfile": "Dockerfile.dev"
-            }
-        }))
+        devcontainer.write_text(
+            json.dumps({"build": {"context": "..", "dockerfile": "Dockerfile.dev"}})
+        )
 
         context, dockerfile = get_devcontainer_build_context(devcontainer)
         assert context == tmp_path

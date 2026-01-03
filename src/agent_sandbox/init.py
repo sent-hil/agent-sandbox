@@ -6,7 +6,7 @@ from typing import Optional
 
 # Default Dockerfile for agent sandboxes
 # Includes common tools needed for Claude Code and OpenCode
-DEFAULT_DOCKERFILE = '''FROM ubuntu:24.04
+DEFAULT_DOCKERFILE = """FROM ubuntu:24.04
 
 # Avoid prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -57,10 +57,10 @@ WORKDIR /home/$USERNAME
 
 # Keep container running
 CMD ["sleep", "infinity"]
-'''
+"""
 
 # Default devcontainer.json
-DEFAULT_DEVCONTAINER_JSON = '''{
+DEFAULT_DEVCONTAINER_JSON = """{
     "name": "Agent Sandbox",
     "build": {
         "dockerfile": "Dockerfile"
@@ -74,33 +74,33 @@ DEFAULT_DEVCONTAINER_JSON = '''{
         }
     }
 }
-'''
+"""
 
 
 def find_git_root(start_path: Optional[Path] = None) -> Optional[Path]:
     """Find the root of the git repository.
-    
+
     Args:
         start_path: Path to start searching from. Defaults to cwd.
-        
+
     Returns:
         Path to git root, or None if not in a git repo.
     """
     if start_path is None:
         start_path = Path.cwd()
-    
+
     start_path = Path(start_path).resolve()
-    
+
     result = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
         cwd=start_path,
         capture_output=True,
         text=True,
     )
-    
+
     if result.returncode != 0:
         return None
-    
+
     return Path(result.stdout.strip())
 
 
@@ -109,22 +109,24 @@ def create_devcontainer(
     project_name: Optional[str] = None,
 ) -> None:
     """Create a devcontainer configuration for agent-sandbox.
-    
+
     Args:
         project_root: Root directory of the project.
         project_name: Name for the project (default: directory name).
     """
     if project_name is None:
         project_name = project_root.name
-    
+
     devcontainer_dir = project_root / ".devcontainer"
     devcontainer_dir.mkdir(exist_ok=True)
-    
+
     # Create Dockerfile
     dockerfile_path = devcontainer_dir / "Dockerfile"
     dockerfile_path.write_text(DEFAULT_DOCKERFILE)
-    
+
     # Create devcontainer.json with project name substituted
-    devcontainer_json = DEFAULT_DEVCONTAINER_JSON.replace("${PROJECT_NAME}", project_name)
+    devcontainer_json = DEFAULT_DEVCONTAINER_JSON.replace(
+        "${PROJECT_NAME}", project_name
+    )
     devcontainer_json_path = devcontainer_dir / "devcontainer.json"
     devcontainer_json_path.write_text(devcontainer_json)
