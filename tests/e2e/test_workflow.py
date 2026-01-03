@@ -15,7 +15,7 @@ class TestFullWorkflow:
     """E2E tests for the full sandbox workflow."""
 
     def test_start_list_stop_remove(self, e2e_project_dir):
-        """Test complete lifecycle: start -> list -> stop -> remove."""
+        """Test complete lifecycle: start -> ps -> stop -> remove."""
         manager = SandboxManager(e2e_project_dir)
         sandbox_name = "e2e-test"
 
@@ -133,7 +133,7 @@ class TestCLI:
         assert result.returncode == 0
         assert "start" in result.stdout
         assert "stop" in result.stdout
-        assert "list" in result.stdout
+        assert "ps" in result.stdout
         assert "connect" in result.stdout
         assert "rm" in result.stdout
 

@@ -125,7 +125,7 @@ def rm(name: str):
     console.print(f"[green]Sandbox '{name}' removed.[/green]")
 
 
-@main.command("list")
+@main.command("ps")
 def list_sandboxes():
     """List all running sandboxes."""
     manager = get_manager()
