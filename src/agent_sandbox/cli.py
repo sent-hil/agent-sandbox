@@ -99,19 +99,29 @@ def stop(name: str):
 
 
 @main.command()
-def stopall():
+@click.option(
+    "--all",
+    "-a",
+    is_flag=True,
+    help="Stop sandboxes from all projects (default: only current project)",
+)
+def stopall(all: bool):
     """Stop all running sandboxes."""
     manager = get_manager()
 
     with console.status("[bold blue]Stopping all sandboxes...", spinner="dots"):
-        stopped = manager.stop_all()
+        stopped = manager.stop_all(all_namespaces=all)
 
     if stopped:
         for name in stopped:
             console.print(f"  [dim]Stopped:[/dim] {name}")
         console.print("[green]All sandboxes stopped.[/green]")
     else:
-        console.print("No sandboxes were running.")
+        if all:
+            console.print("No sandboxes were running.")
+        else:
+            console.print("No sandboxes were running for this project.")
+            console.print("Use --all to stop sandboxes from all projects.")
 
 
 @main.command()
@@ -126,17 +136,32 @@ def rm(name: str):
 
 
 @main.command("list")
-def list_sandboxes():
+@click.option(
+    "--all",
+    "-a",
+    is_flag=True,
+    help="List sandboxes from all projects (default: only current project)",
+)
+def list_sandboxes(all: bool):
     """List all running sandboxes."""
     manager = get_manager()
 
-    sandboxes = manager.list()
+    sandboxes = manager.list(all_namespaces=all)
 
     if not sandboxes:
-        console.print("No sandboxes running.")
+        if all:
+            console.print("No sandboxes running.")
+        else:
+            console.print("No sandboxes running for this project.")
+            console.print("Use --all to see sandboxes from all projects.")
         return
 
-    table = Table(title="Running Sandboxes")
+    title = (
+        "Running Sandboxes"
+        if all
+        else f"Running Sandboxes ({manager._docker.namespace})"
+    )
+    table = Table(title=title)
     table.add_column("Name", style="cyan")
     table.add_column("Branch", style="green")
     table.add_column("Ports", style="yellow")

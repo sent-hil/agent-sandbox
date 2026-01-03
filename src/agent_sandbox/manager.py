@@ -172,7 +172,6 @@ class SandboxManager:
             workspace_path=sandbox_path,
             workdir=self._workdir,
             ports=ports,
-            git_server_path=self._git.git_server_path,
             on_progress=on_progress,
         )
 
@@ -194,13 +193,16 @@ class SandboxManager:
         """
         self._docker.stop_container(name)
 
-    def stop_all(self) -> list[str]:
+    def stop_all(self, all_namespaces: bool = False) -> list[str]:
         """Stop all running sandboxes.
+
+        Args:
+            all_namespaces: If False, only stop sandboxes from this namespace.
 
         Returns:
             List of stopped sandbox names.
         """
-        containers = self._docker.list_sandbox_containers()
+        containers = self._docker.list_sandbox_containers(all_namespaces=all_namespaces)
         stopped = []
 
         for container in containers:
@@ -223,13 +225,16 @@ class SandboxManager:
         # Remove sandbox clone
         self._git.remove_sandbox(name)
 
-    def list(self) -> list[SandboxInfo]:
+    def list(self, all_namespaces: bool = False) -> list[SandboxInfo]:
         """List all running sandboxes.
+
+        Args:
+            all_namespaces: If False, only return sandboxes from this namespace.
 
         Returns:
             List of SandboxInfo for each running sandbox.
         """
-        containers = self._docker.list_sandbox_containers()
+        containers = self._docker.list_sandbox_containers(all_namespaces=all_namespaces)
         sandboxes = []
 
         for container in containers:
