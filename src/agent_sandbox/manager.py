@@ -27,7 +27,7 @@ class SandboxInfo:
     name: str
     branch: str
     ports: dict[int, int]  # container_port -> host_port
-    worktree_path: Path
+    sandbox_path: Path
 
 
 class SandboxManager:
@@ -141,18 +141,21 @@ class SandboxManager:
             # Return existing sandbox info
             ports = self._docker.get_container_ports(name)
             branch_name = self._git.get_current_branch(name)
-            worktree_path = self._git.worktree_path(name)
+            sandbox_path = self._git.sandbox_path(name)
 
             return SandboxInfo(
                 name=name,
                 branch=branch_name,
                 ports=ports,
-                worktree_path=worktree_path,
+                sandbox_path=sandbox_path,
             )
 
-        # Create worktree
-        progress("Creating git worktree...")
-        worktree_path = self._git.create_worktree(name, branch)
+        # Create sandbox clone from git server
+        progress("Setting up git server...")
+        self._git.ensure_git_server()
+
+        progress("Creating sandbox clone...")
+        sandbox_path = self._git.create_sandbox(name, branch)
 
         # Calculate port offset and build port mapping
         offset = self._get_next_port_offset()
@@ -165,9 +168,10 @@ class SandboxManager:
             context_path=self._context_path,
             dockerfile=self._dockerfile,
             image=self._base_image,
-            workspace_path=worktree_path,
+            workspace_path=sandbox_path,
             workdir=self._workdir,
             ports=ports,
+            git_server_path=self._git.git_server_path,
             on_progress=on_progress,
         )
 
@@ -178,7 +182,7 @@ class SandboxManager:
             name=name,
             branch=branch_name,
             ports=ports,
-            worktree_path=worktree_path,
+            sandbox_path=sandbox_path,
         )
 
     def stop(self, name: str) -> None:
@@ -206,7 +210,7 @@ class SandboxManager:
         return stopped
 
     def remove(self, name: str) -> None:
-        """Remove a sandbox (stop container and delete worktree).
+        """Remove a sandbox (stop container and delete sandbox clone).
 
         Args:
             name: The sandbox name.
@@ -215,8 +219,8 @@ class SandboxManager:
         self._docker.stop_container(name)
         self._docker.remove_container(name)
 
-        # Remove worktree
-        self._git.remove_worktree(name)
+        # Remove sandbox clone
+        self._git.remove_sandbox(name)
 
     def list(self) -> list[SandboxInfo]:
         """List all running sandboxes.
@@ -231,14 +235,14 @@ class SandboxManager:
             name = extract_sandbox_name(container)
             ports = self._docker.get_container_ports(name)
             branch = self._git.get_current_branch(name)
-            worktree_path = self._git.worktree_path(name)
+            sandbox_path = self._git.sandbox_path(name)
 
             sandboxes.append(
                 SandboxInfo(
                     name=name,
                     branch=branch,
                     ports=ports,
-                    worktree_path=worktree_path,
+                    sandbox_path=sandbox_path,
                 )
             )
 
@@ -272,3 +276,17 @@ class SandboxManager:
             shell: The shell to use (default: sh).
         """
         self._docker.exec_shell(name, shell)
+
+    def merge(self, name: str) -> tuple[bool, str]:
+        """Merge a sandbox's changes into the current branch.
+
+        Fetches the sandbox branch from the git server and merges it.
+
+        Args:
+            name: The sandbox name.
+
+        Returns:
+            Tuple of (success, message).
+            If success is False, there may be conflicts to resolve.
+        """
+        return self._git.merge_sandbox(name)

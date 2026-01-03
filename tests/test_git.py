@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 
-from agent_sandbox.git import GitClient
+from agent_sandbox.git import GitClient, CONTAINER_GIT_SERVER
 
 
 class TestGitClient:
@@ -14,110 +14,139 @@ class TestGitClient:
         client = GitClient(tmp_path)
         assert client.project_root == tmp_path
 
-    def test_worktree_dir(self, tmp_path):
-        """Should return correct worktree directory."""
+    def test_git_server_path(self, tmp_path):
+        """Should return correct git server path."""
         client = GitClient(tmp_path)
-        assert client.worktree_dir == tmp_path / ".worktrees"
+        assert client.git_server_path == tmp_path / ".git-server"
 
-    def test_worktree_path(self, tmp_path):
-        """Should return correct worktree path for a sandbox."""
+    def test_sandboxes_dir(self, tmp_path):
+        """Should return correct sandboxes directory."""
         client = GitClient(tmp_path)
-        assert client.worktree_path("alice") == tmp_path / ".worktrees" / "alice"
+        assert client.sandboxes_dir == tmp_path / ".sandboxes"
+
+    def test_sandbox_path(self, tmp_path):
+        """Should return correct sandbox path for a name."""
+        client = GitClient(tmp_path)
+        assert client.sandbox_path("alice") == tmp_path / ".sandboxes" / "alice"
 
 
-class TestGitClientBranchExists:
-    """Tests for branch_exists method."""
+class TestGitClientEnsureGitServer:
+    """Tests for ensure_git_server method."""
 
-    def test_branch_exists_true(self, tmp_path):
-        """Should return True when branch exists."""
+    def test_creates_git_server_if_not_exists(self, tmp_path):
+        """Should create bare repo if it doesn't exist."""
         client = GitClient(tmp_path)
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
 
-            result = client.branch_exists("main")
+            client.ensure_git_server()
 
-            assert result is True
             mock_run.assert_called_once()
+            call_args = mock_run.call_args[0][0]
+            assert "git" in call_args
+            assert "clone" in call_args
+            assert "--bare" in call_args
 
-    def test_branch_exists_false(self, tmp_path):
-        """Should return False when branch doesn't exist."""
+    def test_skips_if_git_server_exists(self, tmp_path):
+        """Should skip creation if git server already exists."""
         client = GitClient(tmp_path)
+        client.git_server_path.mkdir(parents=True)
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=1)
+            client.ensure_git_server()
 
-            result = client.branch_exists("nonexistent")
-
-            assert result is False
-
-
-class TestGitClientCreateWorktree:
-    """Tests for create_worktree method."""
-
-    def test_creates_worktree_new_branch(self, tmp_path):
-        """Should create worktree with new branch."""
-        client = GitClient(tmp_path)
-
-        with patch.object(client, "branch_exists", return_value=False):
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(returncode=0)
-
-                result = client.create_worktree("alice")
-
-                assert result == tmp_path / ".worktrees" / "alice"
-                # Should create directory and call git worktree add with -b flag
-                calls = mock_run.call_args_list
-                assert any("-b" in str(call) for call in calls)
-
-    def test_creates_worktree_existing_branch(self, tmp_path):
-        """Should create worktree for existing branch."""
-        client = GitClient(tmp_path)
-
-        with patch.object(client, "branch_exists", return_value=True):
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(returncode=0)
-
-                result = client.create_worktree("alice", branch="feature/login")
-
-                assert result == tmp_path / ".worktrees" / "alice"
-
-    def test_skips_if_worktree_exists(self, tmp_path):
-        """Should skip creation if worktree already exists."""
-        client = GitClient(tmp_path)
-        worktree_path = tmp_path / ".worktrees" / "alice"
-        worktree_path.mkdir(parents=True)
-
-        with patch("subprocess.run") as mock_run:
-            result = client.create_worktree("alice")
-
-            assert result == worktree_path
-            # Should not call git commands
             mock_run.assert_not_called()
 
 
-class TestGitClientRemoveWorktree:
-    """Tests for remove_worktree method."""
+class TestGitClientCreateSandbox:
+    """Tests for create_sandbox method."""
 
-    def test_removes_worktree(self, tmp_path):
-        """Should remove worktree."""
+    def test_creates_sandbox_clone(self, tmp_path):
+        """Should create sandbox by cloning from git server."""
         client = GitClient(tmp_path)
-        worktree_path = tmp_path / ".worktrees" / "alice"
-        worktree_path.mkdir(parents=True)
+        # Create git server directory to skip that step
+        client.git_server_path.mkdir(parents=True)
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
 
-            client.remove_worktree("alice")
+            result = client.create_sandbox("alice")
 
-            mock_run.assert_called()
+            assert result == tmp_path / ".sandboxes" / "alice"
+            # Should have called git clone, git checkout, and git remote set-url
+            assert mock_run.call_count >= 3
 
-    def test_handles_nonexistent_worktree(self, tmp_path):
-        """Should handle nonexistent worktree gracefully."""
+    def test_creates_sandbox_with_custom_branch(self, tmp_path):
+        """Should create sandbox with custom branch name."""
+        client = GitClient(tmp_path)
+        client.git_server_path.mkdir(parents=True)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+
+            result = client.create_sandbox("alice", branch="feature/login")
+
+            assert result == tmp_path / ".sandboxes" / "alice"
+            # Check that checkout was called with custom branch
+            calls = [str(call) for call in mock_run.call_args_list]
+            assert any("feature/login" in call for call in calls)
+
+    def test_skips_if_sandbox_exists(self, tmp_path):
+        """Should skip creation if sandbox already exists."""
+        client = GitClient(tmp_path)
+        sandbox_path = tmp_path / ".sandboxes" / "alice"
+        sandbox_path.mkdir(parents=True)
+
+        with patch("subprocess.run") as mock_run:
+            result = client.create_sandbox("alice")
+
+            assert result == sandbox_path
+            mock_run.assert_not_called()
+
+    def test_sets_origin_to_container_path(self, tmp_path):
+        """Should set origin URL to container git server path."""
+        client = GitClient(tmp_path)
+        client.git_server_path.mkdir(parents=True)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+
+            client.create_sandbox("alice")
+
+            # Find the remote set-url call
+            calls = mock_run.call_args_list
+            set_url_call = None
+            for call in calls:
+                args = call[0][0]
+                if "set-url" in args:
+                    set_url_call = args
+                    break
+
+            assert set_url_call is not None
+            assert CONTAINER_GIT_SERVER in set_url_call
+
+
+class TestGitClientRemoveSandbox:
+    """Tests for remove_sandbox method."""
+
+    def test_removes_sandbox(self, tmp_path):
+        """Should remove sandbox directory."""
+        client = GitClient(tmp_path)
+        sandbox_path = tmp_path / ".sandboxes" / "alice"
+        sandbox_path.mkdir(parents=True)
+        (sandbox_path / "file.txt").write_text("test")
+
+        client.remove_sandbox("alice")
+
+        assert not sandbox_path.exists()
+
+    def test_handles_nonexistent_sandbox(self, tmp_path):
+        """Should handle nonexistent sandbox gracefully."""
         client = GitClient(tmp_path)
 
         # Should not raise
-        client.remove_worktree("nonexistent")
+        client.remove_sandbox("nonexistent")
 
 
 class TestGitClientGetCurrentBranch:
@@ -126,6 +155,9 @@ class TestGitClientGetCurrentBranch:
     def test_gets_current_branch(self, tmp_path):
         """Should get current branch name."""
         client = GitClient(tmp_path)
+        # Create sandbox directory
+        sandbox_path = tmp_path / ".sandboxes" / "alice"
+        sandbox_path.mkdir(parents=True)
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="sandbox/alice\n")
@@ -144,3 +176,56 @@ class TestGitClientGetCurrentBranch:
             result = client.get_current_branch("alice")
 
             assert result == "detached"
+
+
+class TestGitClientMergeSandbox:
+    """Tests for merge_sandbox method."""
+
+    def test_merge_success(self, tmp_path):
+        """Should return success when merge completes."""
+        client = GitClient(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            # Both fetch and merge succeed
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+            success, message = client.merge_sandbox("alice")
+
+            assert success is True
+            assert "Successfully merged" in message
+
+    def test_merge_fetch_failure(self, tmp_path):
+        """Should return failure when fetch fails."""
+        client = GitClient(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="branch not found"
+            )
+
+            success, message = client.merge_sandbox("alice")
+
+            assert success is False
+            assert "Failed to fetch" in message
+
+    def test_merge_conflict(self, tmp_path):
+        """Should return failure with conflict message."""
+        client = GitClient(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+
+            def side_effect(cmd, **kwargs):
+                if "fetch" in cmd:
+                    return MagicMock(returncode=0)
+                elif "merge" in cmd:
+                    return MagicMock(returncode=1, stderr="conflict")
+                elif "status" in cmd:
+                    return MagicMock(returncode=0, stdout="UU file.txt")
+                return MagicMock(returncode=0)
+
+            mock_run.side_effect = side_effect
+
+            success, message = client.merge_sandbox("alice")
+
+            assert success is False
+            assert "conflict" in message.lower()

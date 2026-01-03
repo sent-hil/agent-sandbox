@@ -116,7 +116,7 @@ def stopall():
 @main.command()
 @click.argument("name")
 def rm(name: str):
-    """Remove a sandbox and its worktree."""
+    """Remove a sandbox and its clone."""
     manager = get_manager()
 
     with console.status(f"[bold blue]Removing sandbox '{name}'...", spinner="dots"):
@@ -155,13 +155,14 @@ def list_sandboxes():
 @click.option(
     "--branch", "-b", help="Branch to use if starting (default: sandbox/<name>)"
 )
-def connect(name: str, shell: str, branch: str | None):
+@click.option("--yes", "-y", is_flag=True, help="Start sandbox without prompting")
+def connect(name: str, shell: str, branch: str | None, yes: bool):
     """Connect to a sandbox's shell. Starts the sandbox if not running."""
     manager = get_manager(auto_init=True)
 
     # Check if sandbox is running, if not offer to start it
     if not manager._docker.container_exists(name):
-        if not click.confirm(
+        if not yes and not click.confirm(
             f"Sandbox '{name}' is not running. Start it?", default=True
         ):
             return
@@ -177,8 +178,8 @@ def connect(name: str, shell: str, branch: str | None):
                 info = manager.start(name, branch, on_progress=on_progress)
 
             console.print(f"[green]Sandbox '{name}' started![/green]")
-            console.print(f"  [dim]Worktree:[/dim]  {info.worktree_path}")
-            console.print(f"  [dim]Branch:[/dim]    {info.branch}")
+            console.print(f"  [dim]Path:[/dim]    {info.sandbox_path}")
+            console.print(f"  [dim]Branch:[/dim]  {info.branch}")
             console.print()
 
         except Exception as e:
@@ -213,6 +214,27 @@ def logs(name: str):
     """Show logs for a sandbox."""
     manager = get_manager()
     manager.logs(name)
+
+
+@main.command()
+@click.argument("name")
+def merge(name: str):
+    """Merge a sandbox's changes into the current branch.
+
+    This fetches the sandbox branch from the git server and merges it
+    into your current branch. The sandbox must have pushed its changes
+    first (git push origin sandbox/<name>).
+    """
+    manager = get_manager()
+
+    with console.status(f"[bold blue]Merging sandbox '{name}'...", spinner="dots"):
+        success, message = manager.merge(name)
+
+    if success:
+        console.print(f"[green]{message}[/green]")
+    else:
+        console.print(f"[yellow]{message}[/yellow]")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

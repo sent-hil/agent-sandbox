@@ -157,8 +157,8 @@ class TestSandboxManagerPortCalculation:
 class TestSandboxManagerStart:
     """Tests for start method."""
 
-    def test_start_creates_worktree_and_container(self, tmp_path):
-        """Should create worktree and start container."""
+    def test_start_creates_sandbox_and_container(self, tmp_path):
+        """Should create sandbox clone and start container."""
         devcontainer_dir = tmp_path / ".devcontainer"
         devcontainer_dir.mkdir()
         devcontainer = devcontainer_dir / "devcontainer.json"
@@ -187,14 +187,16 @@ class TestSandboxManagerStart:
         manager._docker.list_sandbox_containers.return_value = []
         manager._docker.container_exists.return_value = False
         manager._git = MagicMock()
-        manager._git.create_worktree.return_value = tmp_path / ".worktrees" / "alice"
+        manager._git.create_sandbox.return_value = tmp_path / ".sandboxes" / "alice"
+        manager._git.git_server_path = tmp_path / ".git-server"
         manager._git.get_current_branch.return_value = "sandbox/alice"
 
         result = manager.start("alice")
 
         assert result.name == "alice"
         assert result.ports == {8000: 8000}
-        manager._git.create_worktree.assert_called_once_with("alice", None)
+        manager._git.ensure_git_server.assert_called_once()
+        manager._git.create_sandbox.assert_called_once_with("alice", None)
         manager._docker.start_container.assert_called_once()
 
     def test_start_skips_if_already_running(self, tmp_path):
@@ -228,7 +230,7 @@ class TestSandboxManagerStart:
         manager._docker.get_container_ports.return_value = {8000: 8001}
         manager._git = MagicMock()
         manager._git.get_current_branch.return_value = "sandbox/alice"
-        manager._git.worktree_path.return_value = tmp_path / ".worktrees" / "alice"
+        manager._git.sandbox_path.return_value = tmp_path / ".sandboxes" / "alice"
 
         result = manager.start("alice")
 
@@ -276,8 +278,8 @@ class TestSandboxManagerStop:
 class TestSandboxManagerRemove:
     """Tests for remove method."""
 
-    def test_remove_stops_and_removes_container_and_worktree(self, tmp_path):
-        """Should stop container, remove it, and remove worktree."""
+    def test_remove_stops_and_removes_container_and_sandbox(self, tmp_path):
+        """Should stop container, remove it, and remove sandbox clone."""
         devcontainer_dir = tmp_path / ".devcontainer"
         devcontainer_dir.mkdir()
         devcontainer = devcontainer_dir / "devcontainer.json"
@@ -309,7 +311,7 @@ class TestSandboxManagerRemove:
 
         manager._docker.stop_container.assert_called_once_with("alice")
         manager._docker.remove_container.assert_called_once_with("alice")
-        manager._git.remove_worktree.assert_called_once_with("alice")
+        manager._git.remove_sandbox.assert_called_once_with("alice")
 
 
 class TestSandboxManagerList:
@@ -346,7 +348,7 @@ class TestSandboxManagerList:
         manager._docker.get_container_ports.return_value = {8000: 8001}
         manager._git = MagicMock()
         manager._git.get_current_branch.return_value = "sandbox/alice"
-        manager._git.worktree_path.return_value = tmp_path / ".worktrees" / "alice"
+        manager._git.sandbox_path.return_value = tmp_path / ".sandboxes" / "alice"
 
         result = manager.list()
 
@@ -365,10 +367,10 @@ class TestSandboxInfo:
             name="alice",
             branch="sandbox/alice",
             ports={8000: 8001, 5173: 5174},
-            worktree_path=Path("/tmp/.worktrees/alice"),
+            sandbox_path=Path("/tmp/.sandboxes/alice"),
         )
 
         assert info.name == "alice"
         assert info.branch == "sandbox/alice"
         assert info.ports == {8000: 8001, 5173: 5174}
-        assert info.worktree_path == Path("/tmp/.worktrees/alice")
+        assert info.sandbox_path == Path("/tmp/.sandboxes/alice")
