@@ -1,22 +1,40 @@
 """CLI for agent-sandbox."""
 
 import sys
+from pathlib import Path
 
 import click
 from rich.console import Console
 from rich.table import Table
 
+from .init import create_devcontainer, find_git_root
 from .manager import SandboxManager
+from .utils import find_project_root
 
 
 console = Console()
 
 
-def get_manager() -> SandboxManager:
-    """Get a SandboxManager instance, handling errors gracefully."""
+def get_manager(auto_init: bool = False) -> SandboxManager:
+    """Get a SandboxManager instance, handling errors gracefully.
+    
+    Args:
+        auto_init: If True, prompt to initialize devcontainer if not found.
+    """
     try:
         return SandboxManager()
     except ValueError as e:
+        if auto_init and "Could not find devcontainer.json" in str(e):
+            # Offer to initialize
+            git_root = find_git_root()
+            if git_root:
+                console.print(f"[yellow]No devcontainer.json found in {git_root}[/yellow]")
+                if click.confirm("Would you like to create one?", default=True):
+                    create_devcontainer(git_root)
+                    console.print(f"[green]Created .devcontainer/devcontainer.json[/green]")
+                    console.print()
+                    return SandboxManager()
+        
         console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
 
@@ -29,11 +47,38 @@ def main():
 
 
 @main.command()
+@click.option("--path", "-p", type=click.Path(exists=True), help="Project path (default: current directory)")
+def init(path: str | None):
+    """Initialize a devcontainer configuration for agent-sandbox."""
+    project_path = Path(path) if path else Path.cwd()
+    
+    # Check if we're in a git repo
+    git_root = find_git_root(project_path)
+    if not git_root:
+        console.print("[red]Error:[/red] Not in a git repository. Please initialize git first.")
+        sys.exit(1)
+    
+    # Check if devcontainer already exists
+    if find_project_root(project_path):
+        console.print("[yellow]devcontainer.json already exists.[/yellow]")
+        if not click.confirm("Overwrite?", default=False):
+            return
+    
+    create_devcontainer(git_root)
+    
+    console.print()
+    console.print(f"[green]Created .devcontainer/devcontainer.json in {git_root}[/green]")
+    console.print()
+    console.print("You can now start a sandbox with:")
+    console.print("  [cyan]agent-sandbox start <name>[/cyan]")
+
+
+@main.command()
 @click.argument("name")
 @click.option("--branch", "-b", help="Branch to use (default: sandbox/<name>)")
 def start(name: str, branch: str | None):
     """Start a new sandbox with its own git worktree."""
-    manager = get_manager()
+    manager = get_manager(auto_init=True)
     
     try:
         info = manager.start(name, branch)
