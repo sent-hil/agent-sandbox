@@ -6,6 +6,7 @@ from typing import Callable, Optional
 
 from .docker import DockerClient
 from .git import GitClient
+from .config import get_default_shell
 from .utils import (
     extract_sandbox_name,
     find_devcontainer_json,
@@ -268,13 +269,16 @@ class SandboxManager:
         """
         self._docker.show_logs(name, follow)
 
-    def connect(self, name: str, shell: str = "sh") -> None:
+    def connect(self, name: str, shell: Optional[str] = None) -> None:
         """Connect to a sandbox's shell.
 
         Args:
             name: The sandbox name.
-            shell: The shell to use (default: sh).
+            shell: The shell to use. If None, uses user config default or /bin/bash.
         """
+        # Use provided shell, or fall back to user config, or /bin/bash
+        if shell is None:
+            shell = get_default_shell() or "/bin/bash"
         self._docker.exec_shell(name, shell)
 
     def merge(self, name: str) -> tuple[bool, str]:

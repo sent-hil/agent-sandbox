@@ -7,6 +7,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from .config import get_default_shell
 from .init import create_devcontainer, find_git_root
 from .manager import SandboxManager
 from .utils import find_project_root
@@ -150,13 +151,16 @@ def list_sandboxes():
 @main.command()
 @click.argument("name")
 @click.option(
-    "--shell", "-s", default="/bin/bash", help="Shell to use (default: /bin/bash)"
+    "--shell",
+    "-s",
+    default=None,
+    help="Shell to use (default: from config or /bin/bash)",
 )
 @click.option(
     "--branch", "-b", help="Branch to use if starting (default: sandbox/<name>)"
 )
 @click.option("--yes", "-y", is_flag=True, help="Start sandbox without prompting")
-def connect(name: str, shell: str, branch: str | None, yes: bool):
+def connect(name: str, shell: str | None, branch: str | None, yes: bool):
     """Connect to a sandbox's shell. Starts the sandbox if not running."""
     manager = get_manager(auto_init=True)
 
@@ -186,9 +190,16 @@ def connect(name: str, shell: str, branch: str | None, yes: bool):
             console.print(f"[red]Error starting sandbox:[/red] {e}")
             sys.exit(1)
 
-    shell_name = shell.split("/")[-1]  # Extract 'bash' from '/bin/bash'
+    # Determine which shell to use
+    actual_shell = shell or get_default_shell() or "/bin/bash"
+    shell_name = actual_shell.split("/")[-1]  # Extract 'bash' from '/bin/bash'
     console.print(f"Connecting to sandbox '{name}' with {shell_name}...")
-    manager.connect(name, shell)
+
+    try:
+        manager.connect(name, actual_shell)
+    except RuntimeError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
 
 
 @main.command()

@@ -11,15 +11,16 @@ DEFAULT_DOCKERFILE = """FROM ubuntu:24.04
 # Avoid prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install essential tools
-RUN apt-get update && apt-get install -y \\
-    curl \\
-    git \\
-    sudo \\
-    wget \\
-    unzip \\
-    build-essential \\
-    ca-certificates \\
+# Install essential tools and fish shell
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    sudo \
+    wget \
+    unzip \
+    build-essential \
+    ca-certificates \
+    fish \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (for Claude Code and other JS tools)
