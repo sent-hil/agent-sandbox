@@ -1,6 +1,5 @@
 """E2E test fixtures."""
 
-import os
 import shutil
 import subprocess
 import tempfile
@@ -29,7 +28,7 @@ def e2e_project_dir():
     with tempfile.TemporaryDirectory() as tmpdir:
         project_dir = Path(tmpdir) / "testproject"
         
-        # Copy testproject to temp location, ignoring venv, cache, and .git
+        # Copy testproject to temp location, ignoring venv, cache, and git
         def ignore_patterns(directory, files):
             return {f for f in files if f in {".venv", "__pycache__", ".pytest_cache", "uv.lock", ".git", ".worktrees"}}
         
@@ -59,12 +58,16 @@ def e2e_project_dir():
         
         yield project_dir
         
-        # Cleanup: stop any running containers from this test
+        # Cleanup: stop and remove any sandbox containers from this test
         try:
-            subprocess.run(
-                ["docker", "compose", "-p", "test-sandbox", "down", "-v"],
-                cwd=project_dir,
+            # List and remove sandbox containers
+            result = subprocess.run(
+                ["docker", "ps", "-a", "--filter", "label=agent-sandbox.managed=true", "--format", "{{.Names}}"],
                 capture_output=True,
+                text=True,
             )
+            for container in result.stdout.strip().split("\n"):
+                if container:
+                    subprocess.run(["docker", "rm", "-f", container], capture_output=True)
         except Exception:
             pass

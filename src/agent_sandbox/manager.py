@@ -8,9 +8,12 @@ from .docker import DockerClient
 from .git import GitClient
 from .utils import (
     extract_sandbox_name,
-    find_compose_file,
+    find_devcontainer_json,
     find_project_root,
-    parse_compose_ports,
+    get_devcontainer_build_context,
+    get_devcontainer_image,
+    get_devcontainer_workdir,
+    parse_devcontainer_ports,
 )
 
 
@@ -25,9 +28,7 @@ class SandboxInfo:
 
 
 class SandboxManager:
-    """Manager for sandbox lifecycle operations."""
-    
-    SERVICE_NAME = "dev"
+    """Manager for sandbox lifecycle operations using devcontainers."""
     
     def __init__(self, path: Optional[Path] = None):
         """Initialize SandboxManager.
@@ -37,7 +38,7 @@ class SandboxManager:
                   If None, uses current directory.
                   
         Raises:
-            ValueError: If no project root (compose file) found.
+            ValueError: If no project root (devcontainer.json) found.
         """
         if path is None:
             path = Path.cwd()
@@ -46,19 +47,30 @@ class SandboxManager:
         self.project_root = find_project_root(path)
         if self.project_root is None:
             raise ValueError(
-                f"Could not find docker-compose.yml in {path} or parent directories"
+                f"Could not find devcontainer.json in {path} or parent directories"
             )
         
-        # Find compose file
-        self.compose_file = find_compose_file(self.project_root)
-        if self.compose_file is None:
-            raise ValueError(f"Could not find compose file in {self.project_root}")
+        # Find devcontainer.json
+        self.devcontainer_file = find_devcontainer_json(self.project_root)
+        if self.devcontainer_file is None:
+            raise ValueError(f"Could not find devcontainer.json in {self.project_root}")
         
-        # Parse base ports from compose file
-        self._base_ports = parse_compose_ports(self.compose_file, self.SERVICE_NAME)
+        # Parse ports from devcontainer.json
+        self._base_ports = parse_devcontainer_ports(self.devcontainer_file)
+        
+        # Get build context and dockerfile
+        self._context_path, self._dockerfile = get_devcontainer_build_context(
+            self.devcontainer_file
+        )
+        
+        # Get base image (if not building)
+        self._base_image = get_devcontainer_image(self.devcontainer_file)
+        
+        # Get working directory
+        self._workdir = get_devcontainer_workdir(self.devcontainer_file)
         
         # Initialize clients
-        self._docker = DockerClient(self.compose_file)
+        self._docker = DockerClient(self.project_root)
         self._git = GitClient(self.project_root)
     
     def _get_next_port_offset(self) -> int:
@@ -78,7 +90,8 @@ class SandboxManager:
         
         containers = self._docker.list_sandbox_containers()
         for container in containers:
-            ports = self._docker.get_container_ports(container)
+            sandbox_name = self._docker.get_sandbox_name_from_container(container)
+            ports = self._docker.get_container_ports(sandbox_name)
             if base_port in ports:
                 host_port = ports[base_port]
                 offset = host_port - base_port
@@ -87,19 +100,16 @@ class SandboxManager:
         
         return max_offset + 1
     
-    def _build_port_env(self, offset: int) -> dict[str, str]:
-        """Build environment variables for port mappings.
+    def _build_port_mapping(self, offset: int) -> dict[int, int]:
+        """Build port mappings with offset applied.
         
         Args:
             offset: The port offset to apply.
             
         Returns:
-            Dict of environment variables (SANDBOX_PORT_0, etc.)
+            Dict mapping container_port -> host_port.
         """
-        env = {}
-        for i, port in enumerate(self._base_ports):
-            env[f"SANDBOX_PORT_{i}"] = str(port + offset)
-        return env
+        return {port: port + offset for port in self._base_ports}
     
     def start(self, name: str, branch: Optional[str] = None) -> SandboxInfo:
         """Start a new sandbox.
@@ -111,12 +121,10 @@ class SandboxManager:
         Returns:
             SandboxInfo with details about the started sandbox.
         """
-        container_name = self._docker.container_name(name, self.SERVICE_NAME)
-        
         # Check if already running
-        if self._docker.container_exists(container_name):
+        if self._docker.container_exists(name):
             # Return existing sandbox info
-            ports = self._docker.get_container_ports(container_name)
+            ports = self._docker.get_container_ports(name)
             branch_name = self._git.get_current_branch(name)
             worktree_path = self._git.worktree_path(name)
             
@@ -130,19 +138,20 @@ class SandboxManager:
         # Create worktree
         worktree_path = self._git.create_worktree(name, branch)
         
-        # Calculate port offset
+        # Calculate port offset and build port mapping
         offset = self._get_next_port_offset()
-        
-        # Build environment
-        env = self._build_port_env(offset)
-        env["WORKSPACE_PATH"] = str(worktree_path)
-        env["GIT_DIR"] = str(self._git.get_git_common_dir())
+        ports = self._build_port_mapping(offset)
         
         # Start container
-        self._docker.compose_up(name, self.SERVICE_NAME, env)
-        
-        # Build port mapping
-        ports = {port: port + offset for port in self._base_ports}
+        self._docker.start_container(
+            sandbox_name=name,
+            context_path=self._context_path,
+            dockerfile=self._dockerfile,
+            image=self._base_image,
+            workspace_path=worktree_path,
+            workdir=self._workdir,
+            ports=ports,
+        )
         
         # Get actual branch name
         branch_name = self._git.get_current_branch(name)
@@ -160,7 +169,7 @@ class SandboxManager:
         Args:
             name: The sandbox name.
         """
-        self._docker.compose_stop(name, self.SERVICE_NAME)
+        self._docker.stop_container(name)
     
     def stop_all(self) -> list[str]:
         """Stop all running sandboxes.
@@ -172,8 +181,8 @@ class SandboxManager:
         stopped = []
         
         for container in containers:
-            self._docker.stop_container(container)
             name = extract_sandbox_name(container)
+            self._docker.stop_container(name)
             stopped.append(name)
         
         return stopped
@@ -184,11 +193,9 @@ class SandboxManager:
         Args:
             name: The sandbox name.
         """
-        # Stop container
-        self._docker.compose_stop(name, self.SERVICE_NAME)
-        
-        # Remove container
-        self._docker.compose_rm(name, self.SERVICE_NAME)
+        # Stop and remove container
+        self._docker.stop_container(name)
+        self._docker.remove_container(name)
         
         # Remove worktree
         self._git.remove_worktree(name)
@@ -204,7 +211,7 @@ class SandboxManager:
         
         for container in containers:
             name = extract_sandbox_name(container)
-            ports = self._docker.get_container_ports(container)
+            ports = self._docker.get_container_ports(name)
             branch = self._git.get_current_branch(name)
             worktree_path = self._git.worktree_path(name)
             
@@ -226,8 +233,7 @@ class SandboxManager:
         Returns:
             Dict mapping container port to host port.
         """
-        container_name = self._docker.container_name(name, self.SERVICE_NAME)
-        return self._docker.get_container_ports(container_name)
+        return self._docker.get_container_ports(name)
     
     def logs(self, name: str, follow: bool = True) -> None:
         """Show logs for a sandbox.
@@ -236,7 +242,7 @@ class SandboxManager:
             name: The sandbox name.
             follow: Whether to follow (stream) logs.
         """
-        self._docker.compose_logs(name, self.SERVICE_NAME, follow)
+        self._docker.show_logs(name, follow)
     
     def connect(self, name: str, shell: str = "sh") -> None:
         """Connect to a sandbox's shell.
@@ -245,5 +251,4 @@ class SandboxManager:
             name: The sandbox name.
             shell: The shell to use (default: sh).
         """
-        container_name = self._docker.container_name(name, self.SERVICE_NAME)
-        self._docker.exec_shell(container_name, shell)
+        self._docker.exec_shell(name, shell)

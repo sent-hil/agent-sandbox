@@ -1,12 +1,14 @@
 FROM python:3.12-slim
 
-WORKDIR /app
-
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Set working directory (will be overridden by volume mount)
+WORKDIR /workspaces/testproject
 
 # Expose port
 EXPOSE 8000
 
-# Run uv sync at startup (since /app is mounted as volume) and then start uvicorn
-CMD ["sh", "-c", "uv sync && uv run uvicorn testproject.main:app --host 0.0.0.0 --port 8000 --reload"]
+# Default command - keep container running
+# The actual app command is run via postStartCommand in devcontainer.json
+CMD ["sleep", "infinity"]

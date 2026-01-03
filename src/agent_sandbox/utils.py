@@ -1,22 +1,19 @@
 """Utility functions for agent-sandbox."""
 
+import json
 import re
 from pathlib import Path
 from typing import Optional
 
-import yaml
-
-# Compose file names to search for (in order of preference)
-COMPOSE_FILES = [
-    "docker-compose.yml",
-    "docker-compose.yaml",
-    "compose.yml",
-    "compose.yaml",
+# Devcontainer file locations to search for (in order of preference)
+DEVCONTAINER_PATHS = [
+    ".devcontainer/devcontainer.json",
+    ".devcontainer.json",
 ]
 
 
 def find_project_root(start_path: Optional[Path] = None) -> Optional[Path]:
-    """Find the project root by searching upward for a compose file.
+    """Find the project root by searching upward for a devcontainer.json.
     
     Args:
         start_path: Directory to start searching from. Defaults to current directory.
@@ -32,109 +29,179 @@ def find_project_root(start_path: Optional[Path] = None) -> Optional[Path]:
     
     # Walk up the directory tree
     while current != current.parent:
-        for compose_file in COMPOSE_FILES:
-            if (current / compose_file).exists():
+        for devcontainer_path in DEVCONTAINER_PATHS:
+            if (current / devcontainer_path).exists():
                 return current
         current = current.parent
     
     # Check root directory as well
-    for compose_file in COMPOSE_FILES:
-        if (current / compose_file).exists():
+    for devcontainer_path in DEVCONTAINER_PATHS:
+        if (current / devcontainer_path).exists():
             return current
     
     return None
 
 
-def find_compose_file(project_root: Path) -> Optional[Path]:
-    """Find the compose file in the project root.
+def find_devcontainer_json(project_root: Path) -> Optional[Path]:
+    """Find the devcontainer.json file in the project.
     
     Args:
         project_root: The project root directory.
         
     Returns:
-        Path to compose file, or None if not found.
+        Path to devcontainer.json, or None if not found.
     """
-    for compose_file in COMPOSE_FILES:
-        path = project_root / compose_file
+    for devcontainer_path in DEVCONTAINER_PATHS:
+        path = project_root / devcontainer_path
         if path.exists():
             return path
     return None
 
 
-def parse_compose_ports(compose_file: Path, service: str) -> list[int]:
-    """Parse port mappings from a docker-compose file for a service.
+def parse_devcontainer_json(devcontainer_file: Path) -> dict:
+    """Parse devcontainer.json file.
     
-    Extracts the container ports (right side of port mapping) from the service.
-    Handles formats like:
-    - "8000:8000"
-    - "${SANDBOX_PORT_0:-8000}:8000"
-    - "8000"
+    Handles JSON with comments (jsonc) by stripping them.
     
     Args:
-        compose_file: Path to the docker-compose file.
-        service: Name of the service to get ports for.
+        devcontainer_file: Path to devcontainer.json.
         
     Returns:
-        List of container ports (integers).
+        Parsed devcontainer configuration dict.
     """
+    content = devcontainer_file.read_text()
+    
+    # Strip single-line comments (// ...)
+    content = re.sub(r'//.*$', '', content, flags=re.MULTILINE)
+    # Strip multi-line comments (/* ... */)
+    content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
+    
     try:
-        with open(compose_file) as f:
-            compose = yaml.safe_load(f)
-    except Exception:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        return {}
+
+
+def parse_devcontainer_ports(devcontainer_file: Path) -> list[int]:
+    """Parse forwarded ports from a devcontainer.json file.
+    
+    Extracts ports from the forwardPorts array.
+    
+    Args:
+        devcontainer_file: Path to the devcontainer.json file.
+        
+    Returns:
+        List of ports (integers).
+    """
+    config = parse_devcontainer_json(devcontainer_file)
+    
+    if not config:
         return []
     
-    if not compose or "services" not in compose:
-        return []
-    
-    services = compose.get("services", {})
-    if service not in services:
-        return []
-    
-    service_config = services[service]
-    if not service_config or "ports" not in service_config:
-        return []
+    # Get forwardPorts array
+    forward_ports = config.get("forwardPorts", [])
     
     ports = []
-    for port_mapping in service_config["ports"]:
-        port_str = str(port_mapping)
-        
-        # Handle "host:container" format
-        if ":" in port_str:
-            # Get the container port (right side)
-            container_port = port_str.split(":")[-1]
-        else:
-            # Just a single port
-            container_port = port_str
-        
-        # Extract numeric port (handles env var syntax like ${VAR:-8000})
-        # Look for the default value after :- or just the number
-        match = re.search(r":-(\d+)", container_port)
-        if match:
-            ports.append(int(match.group(1)))
-        else:
-            # Try to parse as plain integer
+    for port in forward_ports:
+        if isinstance(port, int):
+            ports.append(port)
+        elif isinstance(port, str):
+            # Handle string port (e.g., "8000")
             try:
-                ports.append(int(container_port))
+                ports.append(int(port))
             except ValueError:
-                # Skip unparseable ports
                 continue
     
     return ports
 
 
+def get_devcontainer_build_context(devcontainer_file: Path) -> tuple[Path, str]:
+    """Get the build context and Dockerfile for a devcontainer.
+    
+    Args:
+        devcontainer_file: Path to devcontainer.json.
+        
+    Returns:
+        Tuple of (context_path, dockerfile_path relative to context).
+    """
+    config = parse_devcontainer_json(devcontainer_file)
+    devcontainer_dir = devcontainer_file.parent
+    
+    # Check for build configuration
+    build_config = config.get("build", {})
+    
+    if build_config:
+        # Has build config
+        context = build_config.get("context", ".")
+        dockerfile = build_config.get("dockerfile", "Dockerfile")
+        
+        # Context is relative to devcontainer.json location
+        context_path = (devcontainer_dir / context).resolve()
+        
+        return context_path, dockerfile
+    
+    # Check for dockerFile (legacy) or dockerfile at root
+    dockerfile = config.get("dockerFile") or config.get("dockerfile")
+    if dockerfile:
+        # Dockerfile is relative to devcontainer.json
+        return devcontainer_dir, dockerfile
+    
+    # Check for image (no build needed)
+    if config.get("image"):
+        return devcontainer_dir, ""
+    
+    # Default: look for Dockerfile in .devcontainer/
+    if (devcontainer_dir / "Dockerfile").exists():
+        return devcontainer_dir, "Dockerfile"
+    
+    return devcontainer_dir, ""
+
+
+def get_devcontainer_image(devcontainer_file: Path) -> Optional[str]:
+    """Get the base image from devcontainer.json if specified.
+    
+    Args:
+        devcontainer_file: Path to devcontainer.json.
+        
+    Returns:
+        Image name or None if build is configured instead.
+    """
+    config = parse_devcontainer_json(devcontainer_file)
+    return config.get("image")
+
+
+def get_devcontainer_workdir(devcontainer_file: Path) -> str:
+    """Get the working directory from devcontainer.json.
+    
+    Args:
+        devcontainer_file: Path to devcontainer.json.
+        
+    Returns:
+        Working directory path (default: /workspaces/<project_name>).
+    """
+    config = parse_devcontainer_json(devcontainer_file)
+    
+    # Check for workspaceFolder
+    workspace_folder = config.get("workspaceFolder")
+    if workspace_folder:
+        return workspace_folder
+    
+    # Default devcontainer convention
+    return "/workspaces/project"
+
+
 def extract_sandbox_name(container_name: str) -> str:
     """Extract sandbox name from container name.
     
-    Docker Compose creates containers with names like:
-    - projectname-service-1
-    - projectname_service_1
+    Container names follow pattern: sandbox-<name>
     
     Args:
         container_name: The full container name.
         
     Returns:
-        The extracted sandbox/project name.
+        The extracted sandbox name.
     """
-    # Remove -dev-1 or _dev_1 suffix
-    name = re.sub(r"[-_]dev[-_]\d+$", "", container_name)
-    return name
+    # Remove sandbox- prefix if present
+    if container_name.startswith("sandbox-"):
+        return container_name[8:]
+    return container_name

@@ -5,7 +5,6 @@ description = "CLI tool for creating sandboxed development environments using gi
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.0",
-    "pyyaml>=6.0",
     "rich>=13.0",
 ]
 

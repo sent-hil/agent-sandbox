@@ -1,0 +1,9 @@
+{
+    "name": "Test Project Dev Container",
+    "build": {
+        "context": "..",
+        "dockerfile": "Dockerfile.dev"
+    },
+    "forwardPorts": [8000],
+    "workspaceFolder": "/workspaces/testproject"
+}
