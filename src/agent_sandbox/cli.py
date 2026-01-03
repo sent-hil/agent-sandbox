@@ -170,12 +170,13 @@ def list_sandboxes():
 
 @main.command()
 @click.argument("name")
-@click.option("--shell", "-s", default="sh", help="Shell to use (default: sh)")
+@click.option("--shell", "-s", default="/bin/bash", help="Shell to use (default: /bin/bash)")
 def connect(name: str, shell: str):
     """Connect to a sandbox's shell."""
     manager = get_manager()
     
-    console.print(f"Connecting to sandbox '{name}' with {shell}...")
+    shell_name = shell.split("/")[-1]  # Extract 'bash' from '/bin/bash'
+    console.print(f"Connecting to sandbox '{name}' with {shell_name}...")
     manager.connect(name, shell)
 
 
