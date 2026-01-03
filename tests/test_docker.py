@@ -16,14 +16,16 @@ class TestDockerClient:
         assert client.project_root == tmp_path
 
     def test_container_name(self, tmp_path):
-        """Should generate container name with sandbox prefix."""
+        """Should generate container name with sandbox prefix and namespace."""
         client = DockerClient(tmp_path)
-        assert client.container_name("alice") == "sandbox-alice"
+        expected = f"sandbox-{client.namespace}-alice"
+        assert client.container_name("alice") == expected
 
     def test_image_name(self, tmp_path):
-        """Should generate image name with sandbox prefix."""
+        """Should generate image name with sandbox prefix and namespace."""
         client = DockerClient(tmp_path)
-        assert client.image_name("alice") == "sandbox-alice:latest"
+        expected = f"sandbox-{client.namespace}-alice:latest"
+        assert client.image_name("alice") == expected
 
 
 class TestDockerClientBuildImage:
@@ -44,7 +46,8 @@ class TestDockerClientBuildImage:
             assert "docker" in call_args
             assert "build" in call_args
             assert "-t" in call_args
-            assert "sandbox-alice:latest" in call_args
+            expected_image = f"sandbox-{client.namespace}-alice:latest"
+            assert expected_image in call_args
 
     def test_raises_on_build_failure(self, tmp_path):
         """Should raise RuntimeError on build failure."""
@@ -82,7 +85,8 @@ class TestDockerClientRunContainer:
             assert "run" in call_args
             assert "-d" in call_args
             assert "--name" in call_args
-            assert "sandbox-alice" in call_args
+            expected_container = f"sandbox-{client.namespace}-alice"
+            assert expected_container in call_args
             assert "--label" in call_args
 
     def test_raises_on_run_failure(self, tmp_path):
@@ -110,7 +114,10 @@ class TestDockerClientContainerExists:
         client = DockerClient(tmp_path)
 
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="sandbox-alice\n")
+            expected_container = f"sandbox-{client.namespace}-alice"
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{expected_container}\n"
+            )
 
             result = client.container_exists("alice")
             assert result is True
@@ -194,7 +201,8 @@ class TestDockerClientStopContainer:
             call_args = mock_run.call_args[0][0]
             assert "docker" in call_args
             assert "stop" in call_args
-            assert "sandbox-alice" in call_args
+            expected_container = f"sandbox-{client.namespace}-alice"
+            assert expected_container in call_args
 
 
 class TestDockerClientRemoveContainer:
@@ -213,7 +221,8 @@ class TestDockerClientRemoveContainer:
             assert "docker" in call_args
             assert "rm" in call_args
             assert "-f" in call_args
-            assert "sandbox-alice" in call_args
+            expected_container = f"sandbox-{client.namespace}-alice"
+            assert expected_container in call_args
 
 
 class TestDockerClientGetSandboxName:
@@ -247,10 +256,11 @@ class TestDockerClientShellExists:
 
             assert result is True
             call_args = mock_run.call_args[0][0]
+            expected_container = f"sandbox-{client.namespace}-alice"
             assert call_args == [
                 "docker",
                 "exec",
-                "sandbox-alice",
+                expected_container,
                 "test",
                 "-x",
                 "/bin/bash",

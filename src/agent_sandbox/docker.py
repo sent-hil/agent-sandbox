@@ -26,6 +26,9 @@ class DockerClient:
             project_root: Path to the project root.
         """
         self.project_root = Path(project_root)
+        from .utils import get_project_namespace
+
+        self.namespace = get_project_namespace(project_root)
 
     def container_name(self, sandbox_name: str) -> str:
         """Get the container name for a sandbox.
@@ -36,7 +39,7 @@ class DockerClient:
         Returns:
             The container name.
         """
-        return f"sandbox-{sandbox_name}"
+        return f"sandbox-{self.namespace}-{sandbox_name}"
 
     def image_name(self, sandbox_name: str) -> str:
         """Get the image name for a sandbox.
@@ -47,7 +50,7 @@ class DockerClient:
         Returns:
             The image name.
         """
-        return f"sandbox-{sandbox_name}:latest"
+        return f"sandbox-{self.namespace}-{sandbox_name}:latest"
 
     def build_image(
         self,
@@ -141,6 +144,8 @@ class DockerClient:
             SANDBOX_LABEL,
             "--label",
             f"agent-sandbox.name={sandbox_name}",
+            "--label",
+            f"agent-sandbox.namespace={self.namespace}",
             "-v",
             f"{workspace_path}:{workdir}",
             "-w",
@@ -272,8 +277,11 @@ class DockerClient:
         result = subprocess.run(cmd, capture_output=True, text=True)
         return container_name in result.stdout
 
-    def list_sandbox_containers(self) -> list[str]:
+    def list_sandbox_containers(self, all_namespaces: bool = False) -> list[str]:
         """List all running sandbox containers.
+
+        Args:
+            all_namespaces: If False, only return containers from this namespace.
 
         Returns:
             List of container names.
@@ -286,6 +294,14 @@ class DockerClient:
             "--format",
             "{{.Names}}",
         ]
+
+        if not all_namespaces:
+            cmd.extend(
+                [
+                    "--filter",
+                    f"label=agent-sandbox.namespace={self.namespace}",
+                ]
+            )
 
         result = subprocess.run(cmd, capture_output=True, text=True)
 
@@ -330,14 +346,14 @@ class DockerClient:
         """Extract sandbox name from container name.
 
         Args:
-            container_name: The container name (sandbox-<name>).
+            container_name: The container name (sandbox-<namespace>-<name>).
 
         Returns:
             The sandbox name.
         """
-        if container_name.startswith("sandbox-"):
-            return container_name[8:]
-        return container_name
+        from .utils import extract_sandbox_name
+
+        return extract_sandbox_name(container_name)
 
     def show_logs(self, sandbox_name: str, follow: bool = True) -> None:
         """Show logs for a sandbox container.

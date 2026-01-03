@@ -190,10 +190,29 @@ def get_devcontainer_workdir(devcontainer_file: Path) -> str:
     return "/workspaces/project"
 
 
+def get_project_namespace(project_root: Path) -> str:
+    """Generate a namespace for a project based on its path.
+
+    Args:
+        project_root: The project root directory.
+
+    Returns:
+        A unique namespace string for the project.
+    """
+    # Use the absolute path and create a hash/unique identifier
+    # For simplicity, we'll use the directory name with parent path hash
+    abs_path = str(project_root.resolve())
+    # Create a simple hash from the path
+    path_hash = str(hash(abs_path))[:8]
+    # Use the last directory name plus hash
+    project_name = project_root.name
+    return f"{project_name}-{path_hash}"
+
+
 def extract_sandbox_name(container_name: str) -> str:
     """Extract sandbox name from container name.
 
-    Container names follow pattern: sandbox-<name>
+    Container names follow pattern: sandbox-<namespace>-<name>
 
     Args:
         container_name: The full container name.
@@ -203,5 +222,11 @@ def extract_sandbox_name(container_name: str) -> str:
     """
     # Remove sandbox- prefix if present
     if container_name.startswith("sandbox-"):
-        return container_name[8:]
+        remaining = container_name[8:]
+        # Find the first dash that separates namespace from name
+        # Need to handle namespaces that contain dashes
+        parts = remaining.split("-", 1)
+        if len(parts) == 2:
+            return parts[1]
+        return remaining
     return container_name
