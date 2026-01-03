@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Callable, Optional
 
+from .utils import extract_sandbox_name, get_project_namespace
+
 # Type alias for progress callback
 ProgressCallback = Callable[[str], None]
 
@@ -26,8 +28,6 @@ class DockerClient:
             project_root: Path to the project root.
         """
         self.project_root = Path(project_root)
-        from .utils import get_project_namespace
-
         self.namespace = get_project_namespace(project_root)
 
     def container_name(self, sandbox_name: str) -> str:
@@ -286,66 +286,30 @@ class DockerClient:
         Returns:
             List of container names.
         """
-        if all_namespaces:
-            # Get all sandbox containers
-            cmd = [
-                "docker",
-                "ps",
-                "--filter",
-                f"label={SANDBOX_LABEL}",
-                "--format",
-                "{{.Names}}",
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                return []
-            containers = result.stdout.strip().split("\n")
-            return [c for c in containers if c]
-
-        # For namespace filtering, we need to handle both:
-        # 1. Containers with matching namespace label (new style)
-        # 2. Legacy containers without namespace label but with sandbox dir in this project
-
-        # First get containers with matching namespace label
         cmd = [
             "docker",
             "ps",
             "--filter",
             f"label={SANDBOX_LABEL}",
-            "--filter",
-            f"label=agent-sandbox.namespace={self.namespace}",
             "--format",
             "{{.Names}}",
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        namespaced_containers = []
-        if result.returncode == 0 and result.stdout.strip():
-            namespaced_containers = [c for c in result.stdout.strip().split("\n") if c]
 
-        # Then get legacy containers (no namespace label) and check if they belong here
-        cmd = [
-            "docker",
-            "ps",
-            "--filter",
-            f"label={SANDBOX_LABEL}",
-            "--format",
-            "{{.Label \"agent-sandbox.name\"}}:{{.Names}}",
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode == 0 and result.stdout.strip():
-            sandboxes_dir = self.project_root / ".sandboxes"
-            for line in result.stdout.strip().split("\n"):
-                if not line or ":" not in line:
-                    continue
-                sandbox_name, container_name = line.split(":", 1)
-                # Skip if already in namespaced list
-                if container_name in namespaced_containers:
-                    continue
-                # Check if this sandbox belongs to this project (has a directory here)
-                if sandbox_name and (sandboxes_dir / sandbox_name).exists():
-                    namespaced_containers.append(container_name)
+        if not all_namespaces:
+            cmd.extend(
+                [
+                    "--filter",
+                    f"label=agent-sandbox.namespace={self.namespace}",
+                ]
+            )
 
-        return namespaced_containers
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            return []
+
+        containers = result.stdout.strip().split("\n")
+        return [c for c in containers if c]
 
     def get_container_ports(self, sandbox_name: str) -> dict[int, int]:
         """Get port mappings for a sandbox container.
@@ -403,8 +367,6 @@ class DockerClient:
             return result.stdout.strip()
 
         # Fall back to parsing container name
-        from .utils import extract_sandbox_name
-
         return extract_sandbox_name(container_name)
 
     def show_logs(self, sandbox_name: str, follow: bool = True) -> None:
