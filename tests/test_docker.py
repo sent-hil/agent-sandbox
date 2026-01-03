@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent_sandbox.docker import DockerClient
+from agent_sandbox.docker import DockerClient, sanitize_docker_name
 
 
 class TestDockerClient:
@@ -26,6 +26,43 @@ class TestDockerClient:
         client = DockerClient(tmp_path)
         expected = f"sandbox-{client.namespace}-alice:latest"
         assert client.image_name("alice") == expected
+
+    def test_container_name_sanitizes_slashes(self, tmp_path):
+        """Should sanitize slashes in sandbox names for Docker."""
+        client = DockerClient(tmp_path)
+        result = client.container_name("bug/ps-a")
+        assert "/" not in result
+        assert "bug-ps-a" in result
+
+    def test_image_name_sanitizes_slashes(self, tmp_path):
+        """Should sanitize slashes in sandbox names for Docker."""
+        client = DockerClient(tmp_path)
+        result = client.image_name("feature/new-thing")
+        assert "/" not in result
+        assert "feature-new-thing" in result
+
+
+class TestSanitizeDockerName:
+    """Tests for sanitize_docker_name function."""
+
+    def test_replaces_slashes(self):
+        """Should replace slashes with dashes."""
+        assert sanitize_docker_name("bug/fix") == "bug-fix"
+        assert sanitize_docker_name("feature/a/b") == "feature-a-b"
+
+    def test_preserves_valid_characters(self):
+        """Should preserve valid Docker name characters."""
+        assert sanitize_docker_name("my-sandbox_1.0") == "my-sandbox_1.0"
+
+    def test_replaces_invalid_characters(self):
+        """Should replace invalid characters with dashes."""
+        assert sanitize_docker_name("name@test") == "name-test"
+        assert sanitize_docker_name("name:test") == "name-test"
+
+    def test_ensures_alphanumeric_start(self):
+        """Should ensure name starts with alphanumeric."""
+        assert sanitize_docker_name("-foo")[0].isalnum()
+        assert sanitize_docker_name(".bar")[0].isalnum()
 
 
 class TestDockerClientBuildImage:

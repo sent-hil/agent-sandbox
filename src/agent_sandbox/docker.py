@@ -18,6 +18,27 @@ OutputCallback = Callable[[str], None]
 SANDBOX_LABEL = "agent-sandbox.managed=true"
 
 
+def sanitize_docker_name(name: str) -> str:
+    """Sanitize a name for use in Docker container/image names.
+
+    Docker names must match [a-zA-Z0-9][a-zA-Z0-9_.-]*
+
+    Args:
+        name: The name to sanitize.
+
+    Returns:
+        A sanitized name safe for Docker.
+    """
+    # Replace / with -
+    sanitized = name.replace("/", "-")
+    # Replace any other invalid characters with -
+    sanitized = re.sub(r"[^a-zA-Z0-9_.-]", "-", sanitized)
+    # Ensure it starts with alphanumeric
+    if sanitized and not sanitized[0].isalnum():
+        sanitized = "x" + sanitized
+    return sanitized
+
+
 class DockerClient:
     """Client for Docker operations with devcontainers."""
 
@@ -37,9 +58,10 @@ class DockerClient:
             sandbox_name: The sandbox name.
 
         Returns:
-            The container name.
+            The container name (sanitized for Docker).
         """
-        return f"sandbox-{self.namespace}-{sandbox_name}"
+        safe_name = sanitize_docker_name(sandbox_name)
+        return f"sandbox-{self.namespace}-{safe_name}"
 
     def image_name(self, sandbox_name: str) -> str:
         """Get the image name for a sandbox.
@@ -48,9 +70,10 @@ class DockerClient:
             sandbox_name: The sandbox name.
 
         Returns:
-            The image name.
+            The image name (sanitized for Docker).
         """
-        return f"sandbox-{self.namespace}-{sandbox_name}:latest"
+        safe_name = sanitize_docker_name(sandbox_name)
+        return f"sandbox-{self.namespace}-{safe_name}:latest"
 
     def build_image(
         self,
