@@ -178,6 +178,59 @@ class TestGitClientCreateSandbox:
             assert set_url_call is not None
             assert CONTAINER_GIT_SERVER in set_url_call
 
+    def test_sets_git_config_when_provided(self, tmp_path, mocker):
+        """Should set git name and email when configured."""
+        client = GitClient(tmp_path)
+        client.git_server_path.mkdir(parents=True)
+
+        # Mock git config functions
+        mocker.patch("agent_sandbox.git.get_git_name", return_value="John Doe")
+        mocker.patch("agent_sandbox.git.get_git_email", return_value="john@example.com")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+
+            client.create_sandbox("alice")
+
+            # Check that git config commands were called
+            calls = [call[0][0] for call in mock_run.call_args_list]
+
+            # Should have calls for git clone, checkout, set-url, and config
+            config_calls = [
+                call for call in calls if "config" in call and "user.name" in call
+            ]
+            assert len(config_calls) == 1
+            assert "John Doe" in config_calls[0]
+
+            config_calls = [
+                call for call in calls if "config" in call and "user.email" in call
+            ]
+            assert len(config_calls) == 1
+            assert "john@example.com" in config_calls[0]
+
+    def test_skips_git_config_when_not_provided(self, tmp_path, mocker):
+        """Should skip git config when not configured."""
+        client = GitClient(tmp_path)
+        client.git_server_path.mkdir(parents=True)
+
+        # Mock git config functions to return None
+        mocker.patch("agent_sandbox.git.get_git_name", return_value=None)
+        mocker.patch("agent_sandbox.git.get_git_email", return_value=None)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+
+            client.create_sandbox("alice")
+
+            # Check that no git config commands were called
+            calls = [call[0][0] for call in mock_run.call_args_list]
+            config_calls = [
+                call
+                for call in calls
+                if "config" in call and ("user.name" in call or "user.email" in call)
+            ]
+            assert len(config_calls) == 0
+
 
 class TestGitClientRemoveSandbox:
     """Tests for remove_sandbox method."""

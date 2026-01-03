@@ -5,6 +5,8 @@ from pathlib import Path
 from agent_sandbox.config import (
     find_project_config,
     get_default_shell,
+    get_git_email,
+    get_git_name,
     get_user_config_path,
     load_config,
     load_config_file,
@@ -211,4 +213,74 @@ class TestGetDefaultShell:
         )
 
         result = get_default_shell()
+        assert result is None
+
+
+class TestGetGitName:
+    """Tests for get_git_name function."""
+
+    def test_gets_name_from_config(self, tmp_path, monkeypatch):
+        """Should get git name from config file."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text('[git]\nname = "John Doe"\n')
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_git_name()
+        assert result == "John Doe"
+
+    def test_returns_none_when_not_configured(self, tmp_path, monkeypatch):
+        """Should return None when git name not in config."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text('[git]\nemail = "john@example.com"\n')
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_git_name()
+        assert result is None
+
+    def test_returns_none_when_file_not_exists(self, tmp_path, monkeypatch):
+        """Should return None when config file doesn't exist."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            "agent_sandbox.config.get_user_config_path",
+            lambda: tmp_path / "nonexistent.toml",
+        )
+
+        result = get_git_name()
+        assert result is None
+
+
+class TestGetGitEmail:
+    """Tests for get_git_email function."""
+
+    def test_gets_email_from_config(self, tmp_path, monkeypatch):
+        """Should get git email from config file."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text('[git]\nemail = "john@example.com"\n')
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_git_email()
+        assert result == "john@example.com"
+
+    def test_returns_none_when_not_configured(self, tmp_path, monkeypatch):
+        """Should return None when git email not in config."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text('[git]\nname = "John Doe"\n')
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_git_email()
+        assert result is None
+
+    def test_returns_none_when_file_not_exists(self, tmp_path, monkeypatch):
+        """Should return None when config file doesn't exist."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            "agent_sandbox.config.get_user_config_path",
+            lambda: tmp_path / "nonexistent.toml",
+        )
+
+        result = get_git_email()
         assert result is None

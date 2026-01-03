@@ -114,3 +114,29 @@ def get_default_shell() -> Optional[str]:
 
     # Fall back to top-level 'shell'
     return config.get("shell")
+
+
+def get_git_name() -> Optional[str]:
+    """Get the git user name from configuration.
+
+    Returns:
+        Git user name from config, or None if not configured.
+    """
+    config = load_config()
+    git_config = config.get("git", {})
+    if isinstance(git_config, dict):
+        return git_config.get("name")
+    return None
+
+
+def get_git_email() -> Optional[str]:
+    """Get the git user email from configuration.
+
+    Returns:
+        Git user email from config, or None if not configured.
+    """
+    config = load_config()
+    git_config = config.get("git", {})
+    if isinstance(git_config, dict):
+        return git_config.get("email")
+    return None
