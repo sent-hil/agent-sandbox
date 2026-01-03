@@ -1,11 +1,16 @@
 """CLI for agent-sandbox."""
 
 import sys
+from collections import deque
 from pathlib import Path
 
 import click
-from rich.console import Console
+from rich.console import Console, Group
+from rich.live import Live
+from rich.panel import Panel
+from rich.spinner import Spinner
 from rich.table import Table
+from rich.text import Text
 
 from .config import get_default_shell
 from .init import create_devcontainer, find_git_root
@@ -14,6 +19,9 @@ from .utils import find_project_root
 
 
 console = Console()
+
+# Number of build log lines to display
+BUILD_LOG_LINES = 10
 
 
 def get_manager(auto_init: bool = False) -> SandboxManager:
@@ -172,14 +180,38 @@ def connect(name: str, shell: str | None, branch: str | None, yes: bool):
             return
 
         try:
-            with console.status(
-                f"[bold blue]Starting sandbox '{name}'...", spinner="dots"
-            ) as status:
+            # State for the live display
+            current_status = "Starting sandbox..."
+            build_lines: deque[str] = deque(maxlen=BUILD_LOG_LINES)
 
-                def on_progress(step: str):
-                    status.update(f"[bold blue]{step}")
+            def make_display() -> Group:
+                """Create the live display content."""
+                items = []
+                # Spinner with current status
+                items.append(Spinner("dots", text=f"[bold blue]{current_status}"))
+                # Build log panel if we have output
+                if build_lines:
+                    log_text = Text("\n".join(build_lines), style="dim")
+                    items.append(Panel(log_text, title="Build Output", border_style="blue"))
+                return Group(*items)
 
-                info = manager.start(name, branch, on_progress=on_progress)
+            def on_progress(step: str) -> None:
+                nonlocal current_status
+                current_status = step
+
+            def on_build_output(line: str) -> None:
+                build_lines.append(line)
+                live.update(make_display())
+
+            with Live(make_display(), console=console, refresh_per_second=10) as live:
+                info = manager.start(
+                    name,
+                    branch,
+                    on_progress=on_progress,
+                    on_build_output=on_build_output,
+                )
+                # Update display one more time in case of final status
+                live.update(make_display())
 
             console.print(f"[green]Sandbox '{name}' started![/green]")
             console.print(f"  [dim]Path:[/dim]    {info.sandbox_path}")

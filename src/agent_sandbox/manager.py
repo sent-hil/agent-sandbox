@@ -20,6 +20,9 @@ from .utils import (
 # Type alias for progress callback
 ProgressCallback = Callable[[str], None]
 
+# Type alias for output callback (receives line of output)
+OutputCallback = Callable[[str], None]
+
 
 @dataclass
 class SandboxInfo:
@@ -120,6 +123,7 @@ class SandboxManager:
         name: str,
         branch: Optional[str] = None,
         on_progress: Optional[ProgressCallback] = None,
+        on_build_output: Optional[OutputCallback] = None,
     ) -> SandboxInfo:
         """Start a new sandbox.
 
@@ -127,6 +131,7 @@ class SandboxManager:
             name: The sandbox name.
             branch: Optional branch name. Creates sandbox/<name> if not provided.
             on_progress: Optional callback for progress updates.
+            on_build_output: Optional callback for build output lines.
 
         Returns:
             SandboxInfo with details about the started sandbox.
@@ -174,6 +179,7 @@ class SandboxManager:
             ports=ports,
             git_server_path=self._git.git_server_path,
             on_progress=on_progress,
+            on_build_output=on_build_output,
         )
 
         # Get actual branch name
@@ -235,8 +241,13 @@ class SandboxManager:
         for container in containers:
             name = extract_sandbox_name(container)
             ports = self._docker.get_container_ports(name)
-            branch = self._git.get_current_branch(name)
             sandbox_path = self._git.sandbox_path(name)
+
+            # Handle case where sandbox directory was deleted but container still exists
+            if sandbox_path.exists():
+                branch = self._git.get_current_branch(name)
+            else:
+                branch = "(orphaned)"
 
             sandboxes.append(
                 SandboxInfo(

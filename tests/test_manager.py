@@ -342,13 +342,17 @@ class TestSandboxManagerList:
             ["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True
         )
 
+        # Create sandbox directory so it passes the exists() check
+        sandbox_path = tmp_path / ".sandboxes" / "alice"
+        sandbox_path.mkdir(parents=True)
+
         manager = SandboxManager(tmp_path)
         manager._docker = MagicMock()
         manager._docker.list_sandbox_containers.return_value = ["sandbox-alice"]
         manager._docker.get_container_ports.return_value = {8000: 8001}
         manager._git = MagicMock()
         manager._git.get_current_branch.return_value = "sandbox/alice"
-        manager._git.sandbox_path.return_value = tmp_path / ".sandboxes" / "alice"
+        manager._git.sandbox_path.return_value = sandbox_path
 
         result = manager.list()
 
@@ -356,6 +360,114 @@ class TestSandboxManagerList:
         assert result[0].name == "alice"
         assert result[0].branch == "sandbox/alice"
         assert result[0].ports == {8000: 8001}
+
+    def test_list_handles_orphaned_sandbox(self, tmp_path):
+        """Should handle orphaned sandboxes (container exists but directory deleted).
+
+        Regression test: Previously, list() would raise FileNotFoundError when
+        trying to get the git branch for a sandbox whose directory was deleted
+        but container still existed.
+        """
+        devcontainer_dir = tmp_path / ".devcontainer"
+        devcontainer_dir.mkdir()
+        (devcontainer_dir / "devcontainer.json").write_text('{"build": {"dockerfile": "Dockerfile"}}')
+        (devcontainer_dir / "Dockerfile").write_text("FROM alpine")
+
+        import subprocess
+
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True
+        )
+        (tmp_path / "README.md").write_text("# Test")
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True
+        )
+
+        # Sandbox directory does NOT exist (simulating deleted/orphaned state)
+        sandbox_path = tmp_path / ".sandboxes" / "orphaned"
+        # Note: NOT creating sandbox_path.mkdir()
+
+        manager = SandboxManager(tmp_path)
+        manager._docker = MagicMock()
+        manager._docker.list_sandbox_containers.return_value = ["sandbox-orphaned"]
+        manager._docker.get_container_ports.return_value = {8000: 8001}
+        manager._git = MagicMock()
+        manager._git.sandbox_path.return_value = sandbox_path
+        # get_current_branch should NOT be called for orphaned sandboxes
+
+        result = manager.list()
+
+        assert len(result) == 1
+        assert result[0].name == "orphaned"
+        assert result[0].branch == "(orphaned)"
+        assert result[0].ports == {8000: 8001}
+        # Verify get_current_branch was NOT called (would fail on missing dir)
+        manager._git.get_current_branch.assert_not_called()
+
+    def test_list_with_mixed_valid_and_orphaned_sandboxes(self, tmp_path):
+        """Should handle mix of valid and orphaned sandboxes."""
+        devcontainer_dir = tmp_path / ".devcontainer"
+        devcontainer_dir.mkdir()
+        (devcontainer_dir / "devcontainer.json").write_text('{"build": {"dockerfile": "Dockerfile"}}')
+        (devcontainer_dir / "Dockerfile").write_text("FROM alpine")
+
+        import subprocess
+
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True
+        )
+        (tmp_path / "README.md").write_text("# Test")
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True
+        )
+
+        # Create one valid sandbox directory
+        valid_sandbox_path = tmp_path / ".sandboxes" / "valid"
+        valid_sandbox_path.mkdir(parents=True)
+
+        # Orphaned sandbox has no directory
+        orphaned_sandbox_path = tmp_path / ".sandboxes" / "orphaned"
+
+        manager = SandboxManager(tmp_path)
+        manager._docker = MagicMock()
+        manager._docker.list_sandbox_containers.return_value = [
+            "sandbox-valid",
+            "sandbox-orphaned",
+        ]
+        manager._docker.get_container_ports.return_value = {8000: 8001}
+        manager._git = MagicMock()
+        manager._git.sandbox_path.side_effect = lambda name: (
+            valid_sandbox_path if name == "valid" else orphaned_sandbox_path
+        )
+        manager._git.get_current_branch.return_value = "sandbox/valid"
+
+        result = manager.list()
+
+        assert len(result) == 2
+
+        # Find each sandbox in results
+        valid_info = next(s for s in result if s.name == "valid")
+        orphaned_info = next(s for s in result if s.name == "orphaned")
+
+        assert valid_info.branch == "sandbox/valid"
+        assert orphaned_info.branch == "(orphaned)"
+
+        # get_current_branch should only be called for valid sandbox
+        manager._git.get_current_branch.assert_called_once_with("valid")
 
 
 class TestSandboxInfo:

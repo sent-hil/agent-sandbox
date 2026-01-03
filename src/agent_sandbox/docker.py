@@ -9,6 +9,9 @@ from typing import Callable, Optional
 # Type alias for progress callback
 ProgressCallback = Callable[[str], None]
 
+# Type alias for output callback (receives line of output)
+OutputCallback = Callable[[str], None]
+
 # Label used to identify sandbox containers
 SANDBOX_LABEL = "agent-sandbox.managed=true"
 
@@ -51,6 +54,7 @@ class DockerClient:
         sandbox_name: str,
         context_path: Path,
         dockerfile: str,
+        on_output: Optional[OutputCallback] = None,
     ) -> None:
         """Build a Docker image from a Dockerfile.
 
@@ -58,6 +62,7 @@ class DockerClient:
             sandbox_name: The sandbox name (used for image tag).
             context_path: The build context directory.
             dockerfile: Path to Dockerfile relative to context.
+            on_output: Optional callback for build output lines.
 
         Raises:
             RuntimeError: If build fails.
@@ -74,14 +79,31 @@ class DockerClient:
             str(context_path),
         ]
 
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-        )
-
-        if result.returncode != 0:
-            raise RuntimeError(f"docker build failed: {result.stderr}")
+        # Stream output if callback provided
+        if on_output:
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            output_lines: list[str] = []
+            if process.stdout:
+                for line in process.stdout:
+                    line = line.rstrip()
+                    output_lines.append(line)
+                    on_output(line)
+            process.wait()
+            if process.returncode != 0:
+                raise RuntimeError("docker build failed:\n" + "\n".join(output_lines[-20:]))
+        else:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(f"docker build failed: {result.stderr}")
 
     def run_container(
         self,
@@ -90,6 +112,7 @@ class DockerClient:
         workspace_path: Path,
         workdir: str,
         ports: dict[int, int],
+        git_server_path: Optional[Path] = None,
     ) -> None:
         """Run a container from an image.
 
@@ -99,6 +122,7 @@ class DockerClient:
             workspace_path: Host path to mount as workspace.
             workdir: Working directory inside container.
             ports: Dict mapping container_port -> host_port.
+            git_server_path: Host path to bare repo (mounted at /repo-origin).
 
         Raises:
             RuntimeError: If run fails.
@@ -109,6 +133,8 @@ class DockerClient:
             "docker",
             "run",
             "-d",  # Detached
+            "-u",
+            "root",  # Run as root for bind mount permissions
             "--name",
             container_name,
             "--label",
@@ -120,6 +146,10 @@ class DockerClient:
             "-w",
             workdir,
         ]
+
+        # Mount git server if provided
+        if git_server_path:
+            cmd.extend(["-v", f"{git_server_path}:/repo-origin"])
 
         # Add port mappings
         for container_port, host_port in ports.items():
@@ -149,7 +179,9 @@ class DockerClient:
         workspace_path: Path,
         workdir: str,
         ports: dict[int, int],
+        git_server_path: Optional[Path] = None,
         on_progress: Optional[ProgressCallback] = None,
+        on_build_output: Optional[OutputCallback] = None,
     ) -> None:
         """Build (if needed) and start a container for a sandbox.
 
@@ -161,7 +193,9 @@ class DockerClient:
             workspace_path: Host path to mount as workspace.
             workdir: Working directory inside container.
             ports: Dict mapping container_port -> host_port.
+            git_server_path: Host path to bare repo (mounted at /repo-origin).
             on_progress: Optional callback for progress updates.
+            on_build_output: Optional callback for build output lines.
 
         Raises:
             RuntimeError: If build or run fails.
@@ -175,7 +209,7 @@ class DockerClient:
         if dockerfile:
             # Build from Dockerfile
             progress("Building container image...")
-            self.build_image(sandbox_name, context_path, dockerfile)
+            self.build_image(sandbox_name, context_path, dockerfile, on_output=on_build_output)
             run_image = self.image_name(sandbox_name)
         elif image:
             # Use specified image
@@ -192,6 +226,7 @@ class DockerClient:
             workspace_path=workspace_path,
             workdir=workdir,
             ports=ports,
+            git_server_path=git_server_path,
         )
 
     def stop_container(self, sandbox_name: str) -> None:
