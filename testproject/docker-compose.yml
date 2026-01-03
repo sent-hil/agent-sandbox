@@ -1,0 +1,11 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "${SANDBOX_PORT_0:-8000}:8000"
+    volumes:
+      - ${WORKSPACE_PATH:-.}:/app
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
