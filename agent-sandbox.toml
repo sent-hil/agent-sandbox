@@ -1,2 +1,6 @@
 [defaults]
 shell = "/usr/bin/fish"
+
+[git]
+name = "Opencode"
+email = "me+opencode@sent-hil.com"
