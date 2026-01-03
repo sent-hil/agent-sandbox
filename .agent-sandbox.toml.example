@@ -1,6 +1,7 @@
 # agent-sandbox configuration file
 # Place this file at ~/.agent-sandbox.toml to configure default settings
 
+[defaults]
 # Default shell to use when connecting to sandboxes
 # This will be used if no --shell option is provided
 # Common options: "/bin/bash", "/usr/bin/fish", "/bin/zsh"
@@ -10,6 +11,22 @@ shell = "/usr/bin/fish"
 # For new projects, fish is included by default.
 # For existing projects, add fish to your .devcontainer/Dockerfile:
 #
+#   RUN apt-get update && apt-get install -y \
+#       ... other packages ... \
+#       fish \
+#       && rm -rf /var/lib/apt/lists/*
+#
+# Then rebuild your sandbox:
+#   agent-sandbox rm <sandbox-name>
+#   agent-sandbox connect <sandbox-name>
+#
+
+[git]
+# Git user configuration for sandboxes
+# These settings will be applied to sandbox clones so commits
+# made within sandboxes use the proper author information
+name = "Your Name"
+email = "your.email@example.com"
 #   RUN apt-get update && apt-get install -y \
 #       ... other packages ... \
 #       fish \

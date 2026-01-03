@@ -5,6 +5,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+from .config import get_git_email, get_git_name
+
 # Fixed path inside containers where the git server (bare repo) is mounted
 CONTAINER_GIT_SERVER = "/repo-origin"
 
@@ -125,6 +127,25 @@ class GitClient:
             check=True,
             capture_output=True,
         )
+
+        # Set git user configuration if provided
+        git_name = get_git_name()
+        if git_name:
+            subprocess.run(
+                ["git", "config", "user.name", git_name],
+                cwd=sandbox_path,
+                check=True,
+                capture_output=True,
+            )
+
+        git_email = get_git_email()
+        if git_email:
+            subprocess.run(
+                ["git", "config", "user.email", git_email],
+                cwd=sandbox_path,
+                check=True,
+                capture_output=True,
+            )
 
         return sandbox_path
 
