@@ -29,6 +29,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Project specific
-.worktrees/
-sandbox/
+# Project specific - agent-sandbox directories
+.git-server/
+.sandboxes/
