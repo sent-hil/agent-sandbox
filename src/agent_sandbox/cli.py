@@ -69,40 +69,8 @@ def init(path: str | None):
     console.print()
     console.print(f"[green]Created .devcontainer/devcontainer.json in {git_root}[/green]")
     console.print()
-    console.print("You can now start a sandbox with:")
-    console.print("  [cyan]agent-sandbox start <name>[/cyan]")
-
-
-@main.command()
-@click.argument("name")
-@click.option("--branch", "-b", help="Branch to use (default: sandbox/<name>)")
-def start(name: str, branch: str | None):
-    """Start a new sandbox with its own git worktree."""
-    manager = get_manager(auto_init=True)
-    
-    try:
-        with console.status(f"[bold blue]Starting sandbox '{name}'...", spinner="dots") as status:
-            def on_progress(step: str):
-                status.update(f"[bold blue]{step}")
-            
-            info = manager.start(name, branch, on_progress=on_progress)
-        
-        console.print(f"[green]Sandbox '{name}' started![/green]")
-        console.print()
-        console.print(f"  [bold]Worktree:[/bold]  {info.worktree_path}")
-        console.print(f"  [bold]Branch:[/bold]    {info.branch}")
-        
-        if info.ports:
-            console.print(f"  [bold]Ports:[/bold]")
-            for container_port, host_port in info.ports.items():
-                console.print(f"             {container_port} -> {host_port}")
-        
-        console.print()
-        console.print(f"Connect with: [cyan]agent-sandbox connect {name}[/cyan]")
-        
-    except Exception as e:
-        console.print(f"[red]Error starting sandbox:[/red] {e}")
-        sys.exit(1)
+    console.print("You can now connect to a sandbox with:")
+    console.print("  [cyan]agent-sandbox connect <name>[/cyan]")
 
 
 @main.command()
@@ -171,9 +139,31 @@ def list_sandboxes():
 @main.command()
 @click.argument("name")
 @click.option("--shell", "-s", default="/bin/bash", help="Shell to use (default: /bin/bash)")
-def connect(name: str, shell: str):
-    """Connect to a sandbox's shell."""
-    manager = get_manager()
+@click.option("--branch", "-b", help="Branch to use if starting (default: sandbox/<name>)")
+def connect(name: str, shell: str, branch: str | None):
+    """Connect to a sandbox's shell. Starts the sandbox if not running."""
+    manager = get_manager(auto_init=True)
+    
+    # Check if sandbox is running, if not offer to start it
+    if not manager._docker.container_exists(name):
+        if not click.confirm(f"Sandbox '{name}' is not running. Start it?", default=True):
+            return
+        
+        try:
+            with console.status(f"[bold blue]Starting sandbox '{name}'...", spinner="dots") as status:
+                def on_progress(step: str):
+                    status.update(f"[bold blue]{step}")
+                
+                info = manager.start(name, branch, on_progress=on_progress)
+            
+            console.print(f"[green]Sandbox '{name}' started![/green]")
+            console.print(f"  [dim]Worktree:[/dim]  {info.worktree_path}")
+            console.print(f"  [dim]Branch:[/dim]    {info.branch}")
+            console.print()
+            
+        except Exception as e:
+            console.print(f"[red]Error starting sandbox:[/red] {e}")
+            sys.exit(1)
     
     shell_name = shell.split("/")[-1]  # Extract 'bash' from '/bin/bash'
     console.print(f"Connecting to sandbox '{name}' with {shell_name}...")
