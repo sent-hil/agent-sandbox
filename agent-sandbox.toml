@@ -4,3 +4,9 @@ shell = "/usr/bin/fish"
 [git]
 name = "Opencode"
 email = "me+opencode@sent-hil.com"
+
+[files]
+mounts = [
+    "~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json",
+    ".envrc:/workspaces/agent-sandbox/.envrc",
+]

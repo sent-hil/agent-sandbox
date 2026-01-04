@@ -32,3 +32,4 @@ Thumbs.db
 # Project specific - agent-sandbox directories
 .git-server/
 .sandboxes/
+.envrc
