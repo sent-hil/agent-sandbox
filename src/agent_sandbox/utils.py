@@ -199,11 +199,12 @@ def get_project_namespace(project_root: Path) -> str:
     Returns:
         A unique namespace string for the project.
     """
-    # Use the absolute path and create a hash/unique identifier
-    # For simplicity, we'll use the directory name with parent path hash
+    import hashlib
+
+    # Use the absolute path and create a deterministic hash
     abs_path = str(project_root.resolve())
-    # Create a simple hash from the path
-    path_hash = str(hash(abs_path))[:8]
+    # Create a deterministic hash from the path (first 8 chars of md5)
+    path_hash = hashlib.md5(abs_path.encode()).hexdigest()[:8]
     # Use the last directory name plus hash
     project_name = project_root.name
     return f"{project_name}-{path_hash}"

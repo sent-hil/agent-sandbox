@@ -13,6 +13,7 @@ from agent_sandbox.utils import (
     get_devcontainer_image,
     get_devcontainer_workdir,
     extract_sandbox_name,
+    get_project_namespace,
 )
 
 
@@ -264,3 +265,63 @@ class TestExtractSandboxName:
         """Should return as-is if no sandbox- prefix."""
         result = extract_sandbox_name("alice")
         assert result == "alice"
+
+
+class TestGetProjectNamespace:
+    """Tests for get_project_namespace function."""
+
+    def test_generates_namespace_with_project_name(self, tmp_path):
+        """Should include project directory name in namespace."""
+        project_dir = tmp_path / "my-project"
+        project_dir.mkdir()
+
+        result = get_project_namespace(project_dir)
+        assert result.startswith("my-project-")
+
+    def test_namespace_is_deterministic(self, tmp_path):
+        """Should generate the same namespace for the same path.
+
+        Regression test: Previously used Python's hash() which is randomized
+        across processes, causing different namespaces each run.
+        """
+        project_dir = tmp_path / "test-project"
+        project_dir.mkdir()
+
+        result1 = get_project_namespace(project_dir)
+        result2 = get_project_namespace(project_dir)
+        result3 = get_project_namespace(project_dir)
+
+        assert result1 == result2 == result3
+
+    def test_different_paths_get_different_namespaces(self, tmp_path):
+        """Should generate different namespaces for different paths."""
+        project1 = tmp_path / "project1"
+        project2 = tmp_path / "project2"
+        project1.mkdir()
+        project2.mkdir()
+
+        ns1 = get_project_namespace(project1)
+        ns2 = get_project_namespace(project2)
+
+        assert ns1 != ns2
+
+    def test_same_name_different_parent_gets_different_namespace(self, tmp_path):
+        """Should differentiate projects with same name but different parents."""
+        parent1 = tmp_path / "parent1"
+        parent2 = tmp_path / "parent2"
+        parent1.mkdir()
+        parent2.mkdir()
+
+        project1 = parent1 / "myproject"
+        project2 = parent2 / "myproject"
+        project1.mkdir()
+        project2.mkdir()
+
+        ns1 = get_project_namespace(project1)
+        ns2 = get_project_namespace(project2)
+
+        # Both start with same project name
+        assert ns1.startswith("myproject-")
+        assert ns2.startswith("myproject-")
+        # But have different hashes
+        assert ns1 != ns2
