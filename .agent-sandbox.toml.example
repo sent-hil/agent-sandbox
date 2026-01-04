@@ -32,8 +32,8 @@ email = "your.email@example.com"
 # Commands to run before starting the shell when connecting to a sandbox
 # Useful for setting up environment variables, hooks, etc.
 init = [
-    # Example: load direnv to get environment variables from .envrc
-    # "direnv allow && eval \"$(direnv export bash)\"",
+    # Example: load direnv to get environment variables from .envrc (with fallback if not installed)
+    # "command -v direnv >/dev/null && direnv allow && eval \"$(direnv export bash)\" || true",
     # Example: source a custom setup script
     # "source /workspace/.sandbox-init.sh",
 ]

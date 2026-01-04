@@ -11,6 +11,7 @@ This document provides guidelines for AI coding agents working in this repositor
 ```
 src/agent_sandbox/
 ├── cli.py       # Click-based CLI commands (entry point)
+├── config.py    # Configuration loading (TOML files)
 ├── manager.py   # SandboxManager - main orchestrator
 ├── docker.py    # DockerClient - container operations
 ├── git.py       # GitClient - worktree operations

@@ -7,7 +7,7 @@ email = "me+opencode@sent-hil.com"
 
 [shell]
 init = [
-    "direnv allow && eval \"$(direnv export bash)\""
+    "command -v direnv >/dev/null && direnv allow && eval \"$(direnv export bash)\" || true"
 ]
 
 [files]
