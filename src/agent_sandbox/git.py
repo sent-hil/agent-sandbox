@@ -64,14 +64,14 @@ class GitClient:
         """Push current branch to the git server.
 
         This ensures the git server has the latest commits from main repo
-        before creating a new sandbox.
+        before creating a new sandbox. Uses --force to handle amended commits.
         """
         if not self.git_server_path.exists():
             return
 
-        # Push all branches to the git server
+        # Push all branches to the git server (force to handle amended commits)
         subprocess.run(
-            ["git", "push", str(self.git_server_path), "--all"],
+            ["git", "push", str(self.git_server_path), "--all", "--force"],
             cwd=self.project_root,
             capture_output=True,
         )
