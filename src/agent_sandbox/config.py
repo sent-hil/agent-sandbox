@@ -142,6 +142,32 @@ def get_git_email() -> Optional[str]:
     return None
 
 
+def get_shell_init() -> list[str]:
+    """Get shell initialization commands from configuration.
+
+    These commands are run before starting the shell when connecting to a sandbox.
+    Useful for setting up environment (e.g., direnv hooks).
+
+    Returns:
+        List of shell commands to run.
+    """
+    config = load_config()
+    shell_config = config.get("shell", {})
+
+    if not isinstance(shell_config, dict):
+        return []
+
+    init_commands = shell_config.get("init", [])
+
+    if isinstance(init_commands, str):
+        return [init_commands]
+
+    if isinstance(init_commands, list):
+        return [cmd for cmd in init_commands if isinstance(cmd, str)]
+
+    return []
+
+
 def get_mounts(project_root: Optional[Path] = None) -> list[tuple[str, str]]:
     """Get file mounts from configuration.
 

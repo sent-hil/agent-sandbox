@@ -5,8 +5,13 @@ shell = "/usr/bin/fish"
 name = "Opencode"
 email = "me+opencode@sent-hil.com"
 
+[shell]
+init = [
+    "direnv allow && eval \"$(direnv export bash)\""
+]
+
 [files]
 mounts = [
-    "~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json",
     ".envrc:/workspaces/agent-sandbox/.envrc",
+    "opencode.json:/workspaces/agent-sandbox/opencode.json"
 ]

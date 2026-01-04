@@ -1,10 +1,10 @@
-FROM ubuntu:24.04
+FROM debian:bookworm-slim
 
 # Avoid prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install essential tools and fish shell
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
     sudo \
@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     ca-certificates \
     fish \
+    direnv \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (for Claude Code and other JS tools)
@@ -44,11 +45,13 @@ RUN curl -fsSL https://opencode.ai/install | HOME=/tmp bash \
     && mv /tmp/.opencode/bin/opencode /usr/local/bin/opencode \
     && chmod 755 /usr/local/bin/opencode
 
-# Install Neovim (latest stable)
-RUN curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz \
-    && tar -C /opt -xzf nvim-linux-x86_64.tar.gz \
-    && rm nvim-linux-x86_64.tar.gz \
-    && ln -s /opt/nvim-linux-x86_64/bin/nvim /usr/local/bin/nvim
+# Install Neovim (latest stable, architecture-aware)
+RUN ARCH=$(uname -m) \
+    && if [ "$ARCH" = "aarch64" ]; then NVIM_ARCH="arm64"; else NVIM_ARCH="x86_64"; fi \
+    && curl -LO "https://github.com/neovim/neovim/releases/latest/download/nvim-linux-${NVIM_ARCH}.tar.gz" \
+    && tar -C /opt -xzf "nvim-linux-${NVIM_ARCH}.tar.gz" \
+    && rm "nvim-linux-${NVIM_ARCH}.tar.gz" \
+    && ln -s /opt/nvim-linux-${NVIM_ARCH}/bin/nvim /usr/local/bin/nvim
 
 # Set the default user
 USER $USERNAME

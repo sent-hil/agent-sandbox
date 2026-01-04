@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 from typing import Callable, Optional
 
+from .config import get_shell_init
 from .utils import extract_sandbox_name, get_project_namespace
 
 # Type alias for progress callback
@@ -186,7 +187,7 @@ class DockerClient:
         # Add custom mounts
         if mounts:
             for source, dest in mounts:
-                cmd.extend(["-v", f"{source}:{dest}:ro"])
+                cmd.extend(["-v", f"{source}:{dest}"])
 
         # Add port mappings
         for container_port, host_port in ports.items():
@@ -460,7 +461,25 @@ class DockerClient:
             )
 
         container_name = self.container_name(sandbox_name)
-        cmd = ["docker", "exec", "-it", container_name, shell]
+
+        # Check for shell init commands from config
+        init_commands = get_shell_init()
+
+        if init_commands:
+            # Run init commands then exec into the shell
+            # Join commands with && and then exec the shell
+            init_script = " && ".join(init_commands)
+            cmd = [
+                "docker",
+                "exec",
+                "-it",
+                container_name,
+                "bash",
+                "-c",
+                f"{init_script} && exec {shell}",
+            ]
+        else:
+            cmd = ["docker", "exec", "-it", container_name, shell]
 
         # Run interactively (replace current process)
         os.execvp("docker", cmd)
