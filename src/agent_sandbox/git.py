@@ -119,6 +119,14 @@ class GitClient:
             capture_output=True,
         )
 
+        # Configure push.default=current so `git push` creates the branch on remote
+        subprocess.run(
+            ["git", "config", "push.default", "current"],
+            cwd=sandbox_path,
+            check=True,
+            capture_output=True,
+        )
+
         # Configure the clone to use container path for origin
         # This will be the path inside the container
         subprocess.run(

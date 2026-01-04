@@ -176,6 +176,7 @@ class SandboxManager:
             workspace_path=sandbox_path,
             workdir=self._workdir,
             ports=ports,
+            git_server_path=self._git.git_server_path,
             on_progress=on_progress,
             on_build_output=on_build_output,
         )
