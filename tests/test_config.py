@@ -313,8 +313,10 @@ class TestGetMounts:
         result = get_mounts()
         assert len(result) == 1
         source, dest = result[0]
-        assert source.startswith(str(Path.home()))
-        assert source.endswith(".config/app")
+        # Should not start with ~ anymore
+        assert not source.startswith("~")
+        # Should be an absolute path
+        assert Path(source).is_absolute()
         assert dest == "/root/.config/app"
 
     def test_handles_multiple_mounts(self, tmp_path, monkeypatch):
@@ -364,3 +366,31 @@ class TestGetMounts:
 
         result = get_mounts()
         assert result == [("/valid", "/dest")]
+
+    def test_resolves_relative_paths(self, tmp_path, monkeypatch):
+        """Should resolve relative paths from project root."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text('[files]\nmounts = [".envrc:/container/.envrc"]\n')
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_mounts(project_root=tmp_path)
+        assert len(result) == 1
+        source, dest = result[0]
+        assert source == str(tmp_path / ".envrc")
+        assert dest == "/container/.envrc"
+
+    def test_uses_provided_project_root(self, tmp_path, monkeypatch):
+        """Should use provided project_root for relative paths."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text('[files]\nmounts = ["file.txt:/dest"]\n')
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_mounts(project_root=project_dir)
+        assert len(result) == 1
+        source, _ = result[0]
+        assert source == str(project_dir / "file.txt")

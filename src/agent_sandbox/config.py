@@ -142,14 +142,17 @@ def get_git_email() -> Optional[str]:
     return None
 
 
-def get_mounts() -> list[tuple[str, str]]:
+def get_mounts(project_root: Optional[Path] = None) -> list[tuple[str, str]]:
     """Get file mounts from configuration.
 
     Mounts are specified as "source:dest" strings in [files].mounts array.
-    Source paths support ~ expansion.
+    Source paths support ~ expansion and relative paths (resolved from project root).
+
+    Args:
+        project_root: Project root for resolving relative paths. Defaults to cwd.
 
     Returns:
-        List of (source, dest) tuples.
+        List of (source, dest) tuples with absolute source paths.
     """
     config = load_config()
     files_config = config.get("files", {})
@@ -162,6 +165,9 @@ def get_mounts() -> list[tuple[str, str]]:
     if not isinstance(mounts_list, list):
         return []
 
+    if project_root is None:
+        project_root = Path.cwd()
+
     mounts = []
     for mount in mounts_list:
         if not isinstance(mount, str):
@@ -172,8 +178,11 @@ def get_mounts() -> list[tuple[str, str]]:
         # Split on first colon only (dest paths might have colons on Windows)
         source, dest = mount.split(":", 1)
 
-        # Expand ~ in source path
-        source = str(Path(source).expanduser())
+        # Expand ~ and resolve relative paths
+        source_path = Path(source).expanduser()
+        if not source_path.is_absolute():
+            source_path = project_root / source_path
+        source = str(source_path.resolve())
 
         mounts.append((source, dest))
 
