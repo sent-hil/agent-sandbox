@@ -7,6 +7,7 @@ from agent_sandbox.config import (
     get_default_shell,
     get_git_email,
     get_git_name,
+    get_mounts,
     get_user_config_path,
     load_config,
     load_config_file,
@@ -180,12 +181,13 @@ class TestGetDefaultShell:
         result = get_default_shell()
         assert result == "/usr/bin/zsh"
 
-    def test_defaults_section_takes_priority_over_top_level(self, tmp_path, monkeypatch):
+    def test_defaults_section_takes_priority_over_top_level(
+        self, tmp_path, monkeypatch
+    ):
         """Should prefer [defaults].shell over top-level shell."""
         config_file = tmp_path / "agent-sandbox.toml"
         config_file.write_text(
-            'shell = "/bin/bash"\n\n'
-            '[defaults]\nshell = "/usr/bin/fish"\n'
+            'shell = "/bin/bash"\n\n[defaults]\nshell = "/usr/bin/fish"\n'
         )
 
         monkeypatch.chdir(tmp_path)
@@ -284,3 +286,81 @@ class TestGetGitEmail:
 
         result = get_git_email()
         assert result is None
+
+
+class TestGetMounts:
+    """Tests for get_mounts function."""
+
+    def test_gets_mounts_from_config(self, tmp_path, monkeypatch):
+        """Should get mounts from config file."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text('[files]\nmounts = ["/host/path:/container/path"]\n')
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_mounts()
+        assert result == [("/host/path", "/container/path")]
+
+    def test_expands_tilde_in_source(self, tmp_path, monkeypatch):
+        """Should expand ~ in source path."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text(
+            '[files]\nmounts = ["~/.config/app:/root/.config/app"]\n'
+        )
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_mounts()
+        assert len(result) == 1
+        source, dest = result[0]
+        assert source.startswith(str(Path.home()))
+        assert source.endswith(".config/app")
+        assert dest == "/root/.config/app"
+
+    def test_handles_multiple_mounts(self, tmp_path, monkeypatch):
+        """Should handle multiple mount entries."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text(
+            '[files]\nmounts = [\n    "/path1:/dest1",\n    "/path2:/dest2"\n]\n'
+        )
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_mounts()
+        assert result == [("/path1", "/dest1"), ("/path2", "/dest2")]
+
+    def test_returns_empty_when_not_configured(self, tmp_path, monkeypatch):
+        """Should return empty list when mounts not in config."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text('[files]\nother = "value"\n')
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_mounts()
+        assert result == []
+
+    def test_returns_empty_when_no_files_section(self, tmp_path, monkeypatch):
+        """Should return empty list when no files section."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text('[git]\nname = "John"\n')
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_mounts()
+        assert result == []
+
+    def test_skips_invalid_entries(self, tmp_path, monkeypatch):
+        """Should skip entries without colon separator."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text(
+            "[files]\nmounts = [\n"
+            '    "/valid:/dest",\n'
+            '    "invalid-no-colon",\n'
+            "    123\n"
+            "]\n"
+        )
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_mounts()
+        assert result == [("/valid", "/dest")]

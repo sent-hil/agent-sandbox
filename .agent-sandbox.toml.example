@@ -27,11 +27,14 @@ shell = "/usr/bin/fish"
 # made within sandboxes use the proper author information
 name = "Your Name"
 email = "your.email@example.com"
-#   RUN apt-get update && apt-get install -y \
-#       ... other packages ... \
-#       fish \
-#       && rm -rf /var/lib/apt/lists/*
-#
-# Then rebuild your sandbox:
-#   agent-sandbox rm <sandbox-name>
-#   agent-sandbox connect <sandbox-name>
+
+[files]
+# Mount files from host into containers (read-only)
+# Format: "source:dest" where source is the host path and dest is the container path
+# Source paths support ~ expansion
+mounts = [
+    # Example: mount opencode config
+    # "~/.config/opencode/opencode.json:/root/.config/opencode/opencode.json",
+    # Example: mount SSH keys (for git operations)
+    # "~/.ssh:/root/.ssh",
+]

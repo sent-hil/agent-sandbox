@@ -121,7 +121,9 @@ class DockerClient:
                     on_output(line)
             process.wait()
             if process.returncode != 0:
-                raise RuntimeError("docker build failed:\n" + "\n".join(output_lines[-20:]))
+                raise RuntimeError(
+                    "docker build failed:\n" + "\n".join(output_lines[-20:])
+                )
         else:
             result = subprocess.run(
                 cmd,
@@ -139,6 +141,7 @@ class DockerClient:
         workdir: str,
         ports: dict[int, int],
         git_server_path: Optional[Path] = None,
+        mounts: Optional[list[tuple[str, str]]] = None,
     ) -> None:
         """Run a container from an image.
 
@@ -149,6 +152,7 @@ class DockerClient:
             workdir: Working directory inside container.
             ports: Dict mapping container_port -> host_port.
             git_server_path: Host path to bare repo (mounted at /repo-origin).
+            mounts: List of (source, dest) tuples for additional bind mounts.
 
         Raises:
             RuntimeError: If run fails.
@@ -179,6 +183,11 @@ class DockerClient:
         if git_server_path:
             cmd.extend(["-v", f"{git_server_path}:/repo-origin"])
 
+        # Add custom mounts
+        if mounts:
+            for source, dest in mounts:
+                cmd.extend(["-v", f"{source}:{dest}:ro"])
+
         # Add port mappings
         for container_port, host_port in ports.items():
             cmd.extend(["-p", f"{host_port}:{container_port}"])
@@ -208,6 +217,7 @@ class DockerClient:
         workdir: str,
         ports: dict[int, int],
         git_server_path: Optional[Path] = None,
+        mounts: Optional[list[tuple[str, str]]] = None,
         on_progress: Optional[ProgressCallback] = None,
         on_build_output: Optional[OutputCallback] = None,
     ) -> None:
@@ -222,6 +232,7 @@ class DockerClient:
             workdir: Working directory inside container.
             ports: Dict mapping container_port -> host_port.
             git_server_path: Host path to bare repo (mounted at /repo-origin).
+            mounts: List of (source, dest) tuples for additional bind mounts.
             on_progress: Optional callback for progress updates.
             on_build_output: Optional callback for build output lines.
 
@@ -237,7 +248,9 @@ class DockerClient:
         if dockerfile:
             # Build from Dockerfile
             progress("Building container image...")
-            self.build_image(sandbox_name, context_path, dockerfile, on_output=on_build_output)
+            self.build_image(
+                sandbox_name, context_path, dockerfile, on_output=on_build_output
+            )
             run_image = self.image_name(sandbox_name)
         elif image:
             # Use specified image
@@ -255,6 +268,7 @@ class DockerClient:
             workdir=workdir,
             ports=ports,
             git_server_path=git_server_path,
+            mounts=mounts,
         )
 
     def stop_container(self, sandbox_name: str) -> None:
@@ -382,7 +396,7 @@ class DockerClient:
             "docker",
             "inspect",
             "--format",
-            "{{index .Config.Labels \"agent-sandbox.name\"}}",
+            '{{index .Config.Labels "agent-sandbox.name"}}',
             container_name,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)

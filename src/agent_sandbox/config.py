@@ -140,3 +140,41 @@ def get_git_email() -> Optional[str]:
     if isinstance(git_config, dict):
         return git_config.get("email")
     return None
+
+
+def get_mounts() -> list[tuple[str, str]]:
+    """Get file mounts from configuration.
+
+    Mounts are specified as "source:dest" strings in [files].mounts array.
+    Source paths support ~ expansion.
+
+    Returns:
+        List of (source, dest) tuples.
+    """
+    config = load_config()
+    files_config = config.get("files", {})
+
+    if not isinstance(files_config, dict):
+        return []
+
+    mounts_list = files_config.get("mounts", [])
+
+    if not isinstance(mounts_list, list):
+        return []
+
+    mounts = []
+    for mount in mounts_list:
+        if not isinstance(mount, str):
+            continue
+        if ":" not in mount:
+            continue
+
+        # Split on first colon only (dest paths might have colons on Windows)
+        source, dest = mount.split(":", 1)
+
+        # Expand ~ in source path
+        source = str(Path(source).expanduser())
+
+        mounts.append((source, dest))
+
+    return mounts

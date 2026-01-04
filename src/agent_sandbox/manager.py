@@ -6,7 +6,7 @@ from typing import Callable, Optional
 
 from .docker import DockerClient
 from .git import GitClient
-from .config import get_default_shell
+from .config import get_default_shell, get_mounts
 from .utils import (
     find_devcontainer_json,
     find_project_root,
@@ -177,6 +177,7 @@ class SandboxManager:
             workdir=self._workdir,
             ports=ports,
             git_server_path=self._git.git_server_path,
+            mounts=get_mounts(),
             on_progress=on_progress,
             on_build_output=on_build_output,
         )
