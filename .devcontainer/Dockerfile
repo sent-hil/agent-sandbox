@@ -44,6 +44,12 @@ RUN curl -fsSL https://opencode.ai/install | HOME=/tmp bash \
     && mv /tmp/.opencode/bin/opencode /usr/local/bin/opencode \
     && chmod 755 /usr/local/bin/opencode
 
+# Install Neovim (latest stable)
+RUN curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz \
+    && tar -C /opt -xzf nvim-linux-x86_64.tar.gz \
+    && rm nvim-linux-x86_64.tar.gz \
+    && ln -s /opt/nvim-linux-x86_64/bin/nvim /usr/local/bin/nvim
+
 # Set the default user
 USER $USERNAME
 WORKDIR /home/$USERNAME
