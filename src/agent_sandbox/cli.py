@@ -129,7 +129,7 @@ def stopall(all: bool):
             console.print("No sandboxes were running.")
         else:
             console.print("No sandboxes were running for this project.")
-            console.print("Use --all to stop sandboxes from all projects.")
+            console.print("Use -a to stop sandboxes from all projects.")
 
 
 @main.command()
@@ -161,7 +161,7 @@ def list_sandboxes(all: bool):
             console.print("No sandboxes running.")
         else:
             console.print("No sandboxes running for this project.")
-            console.print("Use --all to see sandboxes from all projects.")
+            console.print("Use -a to see sandboxes from all projects.")
         return
 
     title = (
@@ -217,7 +217,9 @@ def connect(name: str, shell: str | None, branch: str | None, yes: bool):
                 # Build log panel if we have output
                 if build_lines:
                     log_text = Text("\n".join(build_lines), style="dim")
-                    items.append(Panel(log_text, title="Build Output", border_style="blue"))
+                    items.append(
+                        Panel(log_text, title="Build Output", border_style="blue")
+                    )
                 return Group(*items)
 
             def on_progress(step: str) -> None:
