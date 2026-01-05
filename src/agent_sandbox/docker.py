@@ -6,8 +6,19 @@ import subprocess
 from pathlib import Path
 from typing import Callable, Optional
 
+from enum import Enum
+
 from .config import get_shell_init
 from .utils import extract_sandbox_name, get_project_namespace
+
+
+class ContainerState(Enum):
+    """State of a Docker container."""
+
+    RUNNING = "running"
+    STOPPED = "stopped"
+    NOT_FOUND = "not_found"
+
 
 # Type alias for progress callback
 ProgressCallback = Callable[[str], None]
@@ -224,6 +235,9 @@ class DockerClient:
     ) -> None:
         """Build (if needed) and start a container for a sandbox.
 
+        If the container already exists but is stopped, it will be restarted
+        instead of creating a new one.
+
         Args:
             sandbox_name: The sandbox name.
             context_path: Build context path (if building).
@@ -245,6 +259,21 @@ class DockerClient:
             if on_progress:
                 on_progress(msg)
 
+        # Check if container already exists
+        container_state = self.get_container_state(sandbox_name)
+
+        if container_state == ContainerState.RUNNING:
+            # Already running, nothing to do
+            progress("Container already running...")
+            return
+
+        if container_state == ContainerState.STOPPED:
+            # Container exists but is stopped - restart it
+            progress("Restarting stopped container...")
+            self.restart_container(sandbox_name)
+            return
+
+        # Container doesn't exist - build and run
         # Determine which image to use
         if dockerfile:
             # Build from Dockerfile
@@ -282,6 +311,22 @@ class DockerClient:
         cmd = ["docker", "stop", container_name]
         subprocess.run(cmd, capture_output=True)
 
+    def restart_container(self, sandbox_name: str) -> None:
+        """Start a stopped container.
+
+        Args:
+            sandbox_name: The sandbox name.
+
+        Raises:
+            RuntimeError: If the container fails to start.
+        """
+        container_name = self.container_name(sandbox_name)
+        cmd = ["docker", "start", container_name]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            raise RuntimeError(f"docker start failed: {result.stderr}")
+
     def remove_container(self, sandbox_name: str) -> None:
         """Remove a sandbox container.
 
@@ -301,19 +346,47 @@ class DockerClient:
         Returns:
             True if container is running, False otherwise.
         """
+        return self.get_container_state(sandbox_name) == ContainerState.RUNNING
+
+    def get_container_state(self, sandbox_name: str) -> ContainerState:
+        """Get the state of a sandbox container.
+
+        Args:
+            sandbox_name: The sandbox name.
+
+        Returns:
+            ContainerState indicating if container is running, stopped, or not found.
+        """
         container_name = self.container_name(sandbox_name)
 
+        # Check all containers (including stopped ones)
         cmd = [
             "docker",
             "ps",
+            "-a",
             "--filter",
             f"name=^{container_name}$",
             "--format",
-            "{{.Names}}",
+            "{{.Names}}\t{{.State}}",
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
-        return container_name in result.stdout
+
+        if result.returncode != 0 or not result.stdout.strip():
+            return ContainerState.NOT_FOUND
+
+        # Parse output: "container_name\tstate"
+        for line in result.stdout.strip().split("\n"):
+            parts = line.split("\t")
+            if len(parts) >= 2 and parts[0] == container_name:
+                state = parts[1].lower()
+                if state == "running":
+                    return ContainerState.RUNNING
+                else:
+                    # Any other state (exited, created, paused, etc.) is "stopped"
+                    return ContainerState.STOPPED
+
+        return ContainerState.NOT_FOUND
 
     def list_sandbox_containers(self, all_namespaces: bool = False) -> list[str]:
         """List all running sandbox containers.

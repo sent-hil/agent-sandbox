@@ -371,7 +371,9 @@ class TestSandboxManagerList:
         """
         devcontainer_dir = tmp_path / ".devcontainer"
         devcontainer_dir.mkdir()
-        (devcontainer_dir / "devcontainer.json").write_text('{"build": {"dockerfile": "Dockerfile"}}')
+        (devcontainer_dir / "devcontainer.json").write_text(
+            '{"build": {"dockerfile": "Dockerfile"}}'
+        )
         (devcontainer_dir / "Dockerfile").write_text("FROM alpine")
 
         import subprocess
@@ -417,7 +419,9 @@ class TestSandboxManagerList:
         """Should handle mix of valid and orphaned sandboxes."""
         devcontainer_dir = tmp_path / ".devcontainer"
         devcontainer_dir.mkdir()
-        (devcontainer_dir / "devcontainer.json").write_text('{"build": {"dockerfile": "Dockerfile"}}')
+        (devcontainer_dir / "devcontainer.json").write_text(
+            '{"build": {"dockerfile": "Dockerfile"}}'
+        )
         (devcontainer_dir / "Dockerfile").write_text("FROM alpine")
 
         import subprocess

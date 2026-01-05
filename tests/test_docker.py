@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent_sandbox.docker import DockerClient, sanitize_docker_name
+from agent_sandbox.docker import ContainerState, DockerClient, sanitize_docker_name
 
 
 class TestDockerClient:
@@ -146,26 +146,33 @@ class TestDockerClientRunContainer:
 class TestDockerClientContainerExists:
     """Tests for container_exists method."""
 
-    def test_returns_true_when_exists(self, tmp_path):
+    def test_returns_true_when_running(self, tmp_path):
         """Should return True when container is running."""
         client = DockerClient(tmp_path)
 
-        with patch("subprocess.run") as mock_run:
-            expected_container = f"sandbox-{client.namespace}-alice"
-            mock_run.return_value = MagicMock(
-                returncode=0, stdout=f"{expected_container}\n"
-            )
-
+        with patch.object(
+            client, "get_container_state", return_value=ContainerState.RUNNING
+        ):
             result = client.container_exists("alice")
             assert result is True
 
-    def test_returns_false_when_not_exists(self, tmp_path):
-        """Should return False when container not running."""
+    def test_returns_false_when_stopped(self, tmp_path):
+        """Should return False when container is stopped."""
         client = DockerClient(tmp_path)
 
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="")
+        with patch.object(
+            client, "get_container_state", return_value=ContainerState.STOPPED
+        ):
+            result = client.container_exists("alice")
+            assert result is False
 
+    def test_returns_false_when_not_exists(self, tmp_path):
+        """Should return False when container doesn't exist."""
+        client = DockerClient(tmp_path)
+
+        with patch.object(
+            client, "get_container_state", return_value=ContainerState.NOT_FOUND
+        ):
             result = client.container_exists("alice")
             assert result is False
 
@@ -327,3 +334,167 @@ class TestDockerClientExecShell:
 
             assert "not found in container" in str(exc_info.value)
             assert "agent-sandbox rm alice" in str(exc_info.value)
+
+
+class TestDockerClientGetContainerState:
+    """Tests for get_container_state method."""
+
+    def test_returns_running_when_running(self, tmp_path):
+        """Should return RUNNING when container is running."""
+        client = DockerClient(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            expected_container = f"sandbox-{client.namespace}-alice"
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{expected_container}\trunning\n"
+            )
+
+            result = client.get_container_state("alice")
+            assert result == ContainerState.RUNNING
+
+    def test_returns_stopped_when_exited(self, tmp_path):
+        """Should return STOPPED when container is exited."""
+        client = DockerClient(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            expected_container = f"sandbox-{client.namespace}-alice"
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{expected_container}\texited\n"
+            )
+
+            result = client.get_container_state("alice")
+            assert result == ContainerState.STOPPED
+
+    def test_returns_stopped_when_created(self, tmp_path):
+        """Should return STOPPED when container is in created state."""
+        client = DockerClient(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            expected_container = f"sandbox-{client.namespace}-alice"
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=f"{expected_container}\tcreated\n"
+            )
+
+            result = client.get_container_state("alice")
+            assert result == ContainerState.STOPPED
+
+    def test_returns_not_found_when_empty(self, tmp_path):
+        """Should return NOT_FOUND when container doesn't exist."""
+        client = DockerClient(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="")
+
+            result = client.get_container_state("alice")
+            assert result == ContainerState.NOT_FOUND
+
+    def test_returns_not_found_on_error(self, tmp_path):
+        """Should return NOT_FOUND on docker error."""
+        client = DockerClient(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="")
+
+            result = client.get_container_state("alice")
+            assert result == ContainerState.NOT_FOUND
+
+
+class TestDockerClientRestartContainer:
+    """Tests for restart_container method."""
+
+    def test_restarts_container(self, tmp_path):
+        """Should restart a stopped container."""
+        client = DockerClient(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+
+            client.restart_container("alice")
+
+            call_args = mock_run.call_args[0][0]
+            assert "docker" in call_args
+            assert "start" in call_args
+            expected_container = f"sandbox-{client.namespace}-alice"
+            assert expected_container in call_args
+
+    def test_raises_on_restart_failure(self, tmp_path):
+        """Should raise RuntimeError on restart failure."""
+        client = DockerClient(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stderr="start error")
+
+            with pytest.raises(RuntimeError, match="docker start failed"):
+                client.restart_container("alice")
+
+
+class TestDockerClientStartContainerWithState:
+    """Tests for start_container handling of container states."""
+
+    def test_does_nothing_when_running(self, tmp_path):
+        """Should do nothing when container is already running."""
+        client = DockerClient(tmp_path)
+
+        with patch.object(
+            client, "get_container_state", return_value=ContainerState.RUNNING
+        ):
+            with patch.object(client, "build_image") as mock_build:
+                with patch.object(client, "run_container") as mock_run:
+                    client.start_container(
+                        sandbox_name="alice",
+                        context_path=tmp_path,
+                        dockerfile="Dockerfile",
+                        image=None,
+                        workspace_path=tmp_path,
+                        workdir="/app",
+                        ports={},
+                    )
+
+                    mock_build.assert_not_called()
+                    mock_run.assert_not_called()
+
+    def test_restarts_stopped_container(self, tmp_path):
+        """Should restart container when stopped."""
+        client = DockerClient(tmp_path)
+
+        with patch.object(
+            client, "get_container_state", return_value=ContainerState.STOPPED
+        ):
+            with patch.object(client, "restart_container") as mock_restart:
+                with patch.object(client, "build_image") as mock_build:
+                    with patch.object(client, "run_container") as mock_run:
+                        client.start_container(
+                            sandbox_name="alice",
+                            context_path=tmp_path,
+                            dockerfile="Dockerfile",
+                            image=None,
+                            workspace_path=tmp_path,
+                            workdir="/app",
+                            ports={},
+                        )
+
+                        mock_restart.assert_called_once_with("alice")
+                        mock_build.assert_not_called()
+                        mock_run.assert_not_called()
+
+    def test_builds_and_runs_when_not_found(self, tmp_path):
+        """Should build and run when container doesn't exist."""
+        client = DockerClient(tmp_path)
+
+        with patch.object(
+            client, "get_container_state", return_value=ContainerState.NOT_FOUND
+        ):
+            with patch.object(client, "build_image") as mock_build:
+                with patch.object(client, "run_container") as mock_run:
+                    client.start_container(
+                        sandbox_name="alice",
+                        context_path=tmp_path,
+                        dockerfile="Dockerfile",
+                        image=None,
+                        workspace_path=tmp_path,
+                        workdir="/app",
+                        ports={8000: 8001},
+                    )
+
+                    mock_build.assert_called_once()
+                    mock_run.assert_called_once()
