@@ -33,3 +33,7 @@ Thumbs.db
 .git-server/
 .sandboxes/
 .envrc
+
+# User-specific config files (use .example/.sample versions as templates)
+agent-sandbox.toml
+opencode.json
