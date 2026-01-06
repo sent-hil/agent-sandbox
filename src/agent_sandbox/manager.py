@@ -177,7 +177,7 @@ class SandboxManager:
             workdir=self._workdir,
             ports=ports,
             git_server_path=self._git.git_server_path,
-            mounts=get_mounts(self.project_root),
+            mounts=get_mounts(self.project_root, self._workdir),
             on_progress=on_progress,
             on_build_output=on_build_output,
         )

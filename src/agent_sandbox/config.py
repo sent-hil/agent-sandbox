@@ -168,14 +168,19 @@ def get_shell_init() -> list[str]:
     return []
 
 
-def get_mounts(project_root: Optional[Path] = None) -> list[tuple[str, str]]:
+def get_mounts(
+    project_root: Optional[Path] = None, workdir: Optional[str] = None
+) -> list[tuple[str, str]]:
     """Get file mounts from configuration.
 
     Mounts are specified as "source:dest" strings in [files].mounts array.
     Source paths support ~ expansion and relative paths (resolved from project root).
+    Destination paths support $WORKSPACE or ${WORKSPACE} expansion to the container
+    workspace folder (workdir parameter).
 
     Args:
         project_root: Project root for resolving relative paths. Defaults to cwd.
+        workdir: Container workspace folder for $WORKSPACE expansion.
 
     Returns:
         List of (source, dest) tuples with absolute source paths.
@@ -204,12 +209,37 @@ def get_mounts(project_root: Optional[Path] = None) -> list[tuple[str, str]]:
         # Split on first colon only (dest paths might have colons on Windows)
         source, dest = mount.split(":", 1)
 
-        # Expand ~ and resolve relative paths
+        # Expand ~ and resolve relative paths for source
         source_path = Path(source).expanduser()
         if not source_path.is_absolute():
             source_path = project_root / source_path
         source = str(source_path.resolve())
 
+        # Expand $WORKSPACE or ${WORKSPACE} in destination path
+        if workdir:
+            dest = _expand_workspace(dest, workdir)
+
         mounts.append((source, dest))
 
     return mounts
+
+
+def _expand_workspace(dest: str, workdir: str) -> str:
+    """Expand $WORKSPACE or ${WORKSPACE} in destination path.
+
+    Args:
+        dest: Destination path that may contain $WORKSPACE.
+        workdir: The workspace folder to expand to.
+
+    Returns:
+        Destination path with $WORKSPACE expanded.
+    """
+    import re
+
+    # Match $WORKSPACE or ${WORKSPACE}
+    pattern = r"\$\{?WORKSPACE\}?"
+
+    def replace(match: re.Match) -> str:
+        return workdir.rstrip("/")
+
+    return re.sub(pattern, replace, dest)

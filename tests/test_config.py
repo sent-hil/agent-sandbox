@@ -394,3 +394,81 @@ class TestGetMounts:
         assert len(result) == 1
         source, _ = result[0]
         assert source == str(project_dir / "file.txt")
+
+    def test_expands_workspace_in_dest(self, tmp_path, monkeypatch):
+        """Should expand $WORKSPACE in destination path."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text('[files]\nmounts = [".envrc:$WORKSPACE/.envrc"]\n')
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_mounts(project_root=tmp_path, workdir="/root/myproject")
+        assert len(result) == 1
+        source, dest = result[0]
+        assert source == str(tmp_path / ".envrc")
+        assert dest == "/root/myproject/.envrc"
+
+    def test_expands_workspace_with_braces(self, tmp_path, monkeypatch):
+        """Should expand ${WORKSPACE} in destination path."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text('[files]\nmounts = [".envrc:${WORKSPACE}/.envrc"]\n')
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_mounts(project_root=tmp_path, workdir="/workspaces/project")
+        assert len(result) == 1
+        _, dest = result[0]
+        assert dest == "/workspaces/project/.envrc"
+
+    def test_workspace_without_trailing_path(self, tmp_path, monkeypatch):
+        """Should expand $WORKSPACE when it's the entire destination."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text('[files]\nmounts = [".envrc:$WORKSPACE"]\n')
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_mounts(project_root=tmp_path, workdir="/root/project")
+        assert len(result) == 1
+        _, dest = result[0]
+        assert dest == "/root/project"
+
+    def test_workspace_not_expanded_without_workdir(self, tmp_path, monkeypatch):
+        """Should not expand $WORKSPACE when workdir is not provided."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text('[files]\nmounts = [".envrc:$WORKSPACE/.envrc"]\n')
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_mounts(project_root=tmp_path)
+        assert len(result) == 1
+        _, dest = result[0]
+        assert dest == "$WORKSPACE/.envrc"
+
+    def test_workspace_strips_trailing_slash(self, tmp_path, monkeypatch):
+        """Should handle workdir with trailing slash."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text('[files]\nmounts = [".envrc:$WORKSPACE/.envrc"]\n')
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_mounts(project_root=tmp_path, workdir="/root/project/")
+        assert len(result) == 1
+        _, dest = result[0]
+        assert dest == "/root/project/.envrc"
+
+    def test_multiple_workspace_expansions(self, tmp_path, monkeypatch):
+        """Should expand multiple $WORKSPACE occurrences."""
+        config_file = tmp_path / "agent-sandbox.toml"
+        config_file.write_text(
+            "[files]\nmounts = [\n"
+            '    ".envrc:$WORKSPACE/.envrc",\n'
+            '    "config.json:${WORKSPACE}/config.json"\n'
+            "]\n"
+        )
+
+        monkeypatch.chdir(tmp_path)
+
+        result = get_mounts(project_root=tmp_path, workdir="/app")
+        assert len(result) == 2
+        assert result[0][1] == "/app/.envrc"
+        assert result[1][1] == "/app/config.json"
