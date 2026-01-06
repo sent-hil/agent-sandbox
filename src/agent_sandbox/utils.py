@@ -3,6 +3,7 @@
 import json
 import re
 from pathlib import Path
+import random
 from typing import Optional
 
 # Devcontainer file locations to search for (in order of preference)
@@ -208,6 +209,63 @@ def get_project_namespace(project_root: Path) -> str:
     # Use the last directory name plus hash
     project_name = project_root.name
     return f"{project_name}-{path_hash}"
+
+
+def generate_sandbox_name(sandboxes_dir: Path) -> str:
+    """Generate a unique sandbox name using adjective-noun combinations.
+
+    Args:
+        sandboxes_dir: Path to the .sandboxes directory for conflict checking.
+
+    Returns:
+        A unique sandbox name.
+    """
+    adjectives = [
+        "quick",
+        "swift",
+        "fast",
+        "bright",
+        "smart",
+        "clean",
+        "neat",
+        "cool",
+        "warm",
+        "fresh",
+        "light",
+        "calm",
+        "quiet",
+        "alert",
+        "eager",
+    ]
+
+    nouns = [
+        "fox",
+        "wolf",
+        "bird",
+        "fish",
+        "tree",
+        "moon",
+        "star",
+        "sun",
+        "cloud",
+        "wave",
+        "stone",
+        "river",
+        "mountain",
+        "forest",
+        "garden",
+    ]
+
+    base_name = f"{random.choice(adjectives)}-{random.choice(nouns)}"
+
+    # Check for conflicts and add suffix if needed
+    counter = 2
+    final_name = base_name
+    while (sandboxes_dir / final_name).exists():
+        final_name = f"{base_name}-{counter}"
+        counter += 1
+
+    return final_name
 
 
 def extract_sandbox_name(container_name: str) -> str:

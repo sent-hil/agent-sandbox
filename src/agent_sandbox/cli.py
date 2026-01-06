@@ -15,7 +15,7 @@ from rich.text import Text
 from .config import get_default_shell
 from .init import create_devcontainer, find_git_root
 from .manager import SandboxManager
-from .utils import find_project_root
+from .utils import find_project_root, generate_sandbox_name
 
 
 console = Console()
@@ -182,7 +182,7 @@ def list_sandboxes(all: bool):
 
 
 @main.command()
-@click.argument("name")
+@click.argument("name", required=False)
 @click.option(
     "--shell",
     "-s",
@@ -193,8 +193,18 @@ def list_sandboxes(all: bool):
     "--branch", "-b", help="Branch to use if starting (default: sandbox/<name>)"
 )
 @click.option("--yes", "-y", is_flag=True, help="Start sandbox without prompting")
-def connect(name: str, shell: str | None, branch: str | None, yes: bool):
+def connect(name: str | None, shell: str | None, branch: str | None, yes: bool):
     """Connect to a sandbox's shell. Starts the sandbox if not running."""
+    if name is None:
+        project_root = find_project_root()
+        if not project_root:
+            console.print("[red]Error: Not in a project with devcontainer.json[/red]")
+            sys.exit(1)
+
+        sandboxes_dir = project_root / ".sandboxes"
+        name = generate_sandbox_name(sandboxes_dir)
+        console.print(f"Generated sandbox name: [cyan]{name}[/cyan]")
+
     manager = get_manager(auto_init=True)
 
     # Check if sandbox is running, if not offer to start it
