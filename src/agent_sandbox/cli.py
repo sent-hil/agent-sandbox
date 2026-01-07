@@ -29,32 +29,38 @@ BUILD_LOG_LINES = 10
 def complete_sandbox_names(ctx, param, incomplete):
     """Complete sandbox names from running containers and filesystem."""
     try:
+        # Check if -a/--all flag is set
+        all_namespaces = ctx.params.get("all", False)
+
         # Get sandbox names from running containers
         manager = get_manager()
         running_sandboxes = []
         try:
-            sandboxes = manager.list(all_namespaces=False)
+            sandboxes = manager.list(all_namespaces=all_namespaces)
             running_sandboxes = [sandbox.name for sandbox in sandboxes]
         except (ValueError, RuntimeError):
             # If manager initialization fails, continue with filesystem only
             pass
 
         # Get sandbox names from filesystem (.sandboxes directory)
-        all_sandboxes = []
-        try:
-            project_root = find_project_root()
-            if project_root:
-                sandboxes_dir = project_root / ".sandboxes"
-                if sandboxes_dir.exists():
-                    all_sandboxes = [
-                        d.name for d in sandboxes_dir.iterdir() if d.is_dir()
-                    ]
-        except Exception:
-            # If we can't find project root, continue with running sandboxes only
-            pass
+        # Only include filesystem sandboxes when showing current project only
+        filesystem_sandboxes = []
+        if not all_namespaces:
+            try:
+                project_root = find_project_root()
+                if project_root:
+                    sandboxes_dir = project_root / ".sandboxes"
+                    if sandboxes_dir.exists():
+                        filesystem_sandboxes = [
+                            d.name for d in sandboxes_dir.iterdir() if d.is_dir()
+                        ]
+            except Exception:
+                # If we can't find project root, continue with running sandboxes only
+                pass
 
-        # Merge and deduplicate, preferring running sandboxes
-        all_names = list(dict.fromkeys(running_sandboxes + all_sandboxes))
+        # Merge: running sandboxes first (in order from ps), then filesystem sandboxes
+        # Deduplicate while preserving order
+        all_names = list(dict.fromkeys(running_sandboxes + filesystem_sandboxes))
 
         # Filter by incomplete prefix
         matches = [name for name in all_names if name.startswith(incomplete)]
