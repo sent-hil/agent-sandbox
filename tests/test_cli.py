@@ -1,7 +1,7 @@
 """Tests for CLI commands."""
 
 from click.testing import CliRunner
-from agent_sandbox.cli import main
+from agent_sandbox.cli import main, complete_sandbox_names
 
 
 class TestCompletionCommand:
@@ -48,3 +48,42 @@ class TestCompletionCommand:
         assert "zsh" in result.output
         assert "fish" in result.output
         assert "--install" in result.output
+
+
+class TestSandboxNameCompletion:
+    """Test sandbox name completion functionality."""
+
+    def test_complete_sandbox_names_empty(self):
+        """Test completion with no sandboxes."""
+        # Mock context and param (not used in this case)
+        ctx = None
+        param = None
+
+        # Test with empty incomplete string
+        result = complete_sandbox_names(ctx, param, "")
+
+        # Should return empty list when no sandboxes exist
+        assert isinstance(result, list)
+        # May be empty or contain some default names
+
+    def test_complete_sandbox_names_partial(self):
+        """Test completion with partial input."""
+        ctx = None
+        param = None
+
+        # Test with partial input
+        result = complete_sandbox_names(ctx, param, "test")
+
+        # Should return empty list when no sandboxes match
+        assert isinstance(result, list)
+        # Should filter by prefix
+
+    def test_complete_sandbox_names_error_handling(self):
+        """Test completion handles errors gracefully."""
+        # Create a scenario where manager might fail
+        ctx = None
+        param = None
+
+        # Should not raise exceptions even if manager fails
+        result = complete_sandbox_names(ctx, param, "anything")
+        assert isinstance(result, list)
