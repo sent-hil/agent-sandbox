@@ -229,6 +229,12 @@ def list_sandboxes(all: bool):
 
 
 @main.command()
+@click.option(
+    "--all",
+    "-a",
+    is_flag=True,
+    help="Show sandboxes from all projects in autocomplete",
+)
 @click.argument("name", required=False, shell_complete=complete_sandbox_names)
 @click.option(
     "--shell",
@@ -240,7 +246,9 @@ def list_sandboxes(all: bool):
     "--branch", "-b", help="Branch to use if starting (default: sandbox/<name>)"
 )
 @click.option("--yes", "-y", is_flag=True, help="Start sandbox without prompting")
-def connect(name: str | None, shell: str | None, branch: str | None, yes: bool):
+def connect(
+    all: bool, name: str | None, shell: str | None, branch: str | None, yes: bool
+):
     """Connect to a sandbox's shell. Starts the sandbox if not running."""
     if name is None:
         project_root = find_project_root()
