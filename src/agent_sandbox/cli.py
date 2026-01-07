@@ -26,6 +26,45 @@ console = Console()
 BUILD_LOG_LINES = 10
 
 
+def complete_sandbox_names(ctx, param, incomplete):
+    """Complete sandbox names from running containers and filesystem."""
+    try:
+        # Get sandbox names from running containers
+        manager = get_manager()
+        running_sandboxes = []
+        try:
+            sandboxes = manager.list(all_namespaces=False)
+            running_sandboxes = [sandbox.name for sandbox in sandboxes]
+        except (ValueError, RuntimeError):
+            # If manager initialization fails, continue with filesystem only
+            pass
+
+        # Get sandbox names from filesystem (.sandboxes directory)
+        all_sandboxes = []
+        try:
+            project_root = find_project_root()
+            if project_root:
+                sandboxes_dir = project_root / ".sandboxes"
+                if sandboxes_dir.exists():
+                    all_sandboxes = [
+                        d.name for d in sandboxes_dir.iterdir() if d.is_dir()
+                    ]
+        except Exception:
+            # If we can't find project root, continue with running sandboxes only
+            pass
+
+        # Merge and deduplicate, preferring running sandboxes
+        all_names = list(dict.fromkeys(running_sandboxes + all_sandboxes))
+
+        # Filter by incomplete prefix
+        matches = [name for name in all_names if name.startswith(incomplete)]
+
+        return matches
+    except Exception:
+        # If anything fails, return empty list to avoid breaking completion
+        return []
+
+
 def get_manager(auto_init: bool = False) -> SandboxManager:
     """Get a SandboxManager instance, handling errors gracefully.
 
@@ -98,7 +137,7 @@ def init(path: str | None):
 
 
 @main.command()
-@click.argument("name")
+@click.argument("name", shell_complete=complete_sandbox_names)
 def stop(name: str):
     """Stop a sandbox."""
     manager = get_manager()
@@ -135,7 +174,7 @@ def stopall(all: bool):
 
 
 @main.command()
-@click.argument("name")
+@click.argument("name", shell_complete=complete_sandbox_names)
 def rm(name: str):
     """Remove a sandbox and its clone."""
     manager = get_manager()
@@ -184,7 +223,7 @@ def list_sandboxes(all: bool):
 
 
 @main.command()
-@click.argument("name", required=False)
+@click.argument("name", required=False, shell_complete=complete_sandbox_names)
 @click.option(
     "--shell",
     "-s",
@@ -274,7 +313,7 @@ def connect(name: str | None, shell: str | None, branch: str | None, yes: bool):
 
 
 @main.command()
-@click.argument("name")
+@click.argument("name", shell_complete=complete_sandbox_names)
 def ports(name: str):
     """Show ports for a sandbox."""
     manager = get_manager()
@@ -291,7 +330,7 @@ def ports(name: str):
 
 
 @main.command()
-@click.argument("name")
+@click.argument("name", shell_complete=complete_sandbox_names)
 def logs(name: str):
     """Show logs for a sandbox."""
     manager = get_manager()
@@ -299,7 +338,7 @@ def logs(name: str):
 
 
 @main.command()
-@click.argument("name")
+@click.argument("name", shell_complete=complete_sandbox_names)
 def merge(name: str):
     """Merge a sandbox's changes into the current branch.
 
