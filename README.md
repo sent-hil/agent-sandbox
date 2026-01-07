@@ -85,18 +85,33 @@ The `[shell].init` option lets you run commands before the shell starts when con
 
 The init commands run in bash, then exec into your configured shell with the environment preserved.
 
-## Commands
+## Shell Completion
 
-| Command | Description |
-|---------|-------------|
-| `agent-sandbox init` | Initialize devcontainer config |
-| `agent-sandbox connect <name>` | Start and connect to a sandbox |
-| `agent-sandbox ps` | List running sandboxes |
-| `agent-sandbox stop <name>` | Stop a sandbox |
-| `agent-sandbox rm <name>` | Remove a sandbox and its clone |
-| `agent-sandbox merge <name>` | Merge sandbox changes to current branch |
-| `agent-sandbox logs <name>` | Show container logs |
-| `agent-sandbox ports <name>` | Show port mappings |
+Enable tab completion for agent-sandbox commands:
+
+```bash
+# Bash
+eval "$(_AGENT_SANDBOX_COMPLETE=bash_source agent-sandbox)"
+
+# Zsh  
+eval "$(_AGENT_SANDBOX_COMPLETE=zsh_source agent-sandbox)"
+
+# Fish
+_AGENT_SANDBOX_COMPLETE=fish_source agent-sandbox > ~/.config/fish/completions/agent-sandbox.fish
+source ~/.config/fish/completions/agent-sandbox.fish
+```
+
+For automatic installation:
+```bash
+agent-sandbox completion bash --install
+agent-sandbox completion zsh --install  
+agent-sandbox completion fish --install
+```
+
+Auto-detect your current shell:
+```bash
+agent-sandbox completion
+```
 
 ## How It Works
 

@@ -1,5 +1,7 @@
 """CLI for agent-sandbox."""
 
+import os
+import subprocess
 import sys
 from collections import deque
 from pathlib import Path
@@ -315,6 +317,197 @@ def merge(name: str):
     else:
         console.print(f"[yellow]{message}[/yellow]")
         sys.exit(1)
+
+
+def _detect_shell() -> str | None:
+    """Auto-detect current shell from environment."""
+    shell_path = os.environ.get("SHELL", "")
+    if "bash" in shell_path:
+        return "bash"
+    elif "zsh" in shell_path:
+        return "zsh"
+    elif "fish" in shell_path:
+        return "fish"
+    return None
+
+
+def _get_program_name() -> str:
+    """Get the program name for completion environment variable."""
+    return "AGENT_SANDBOX"
+
+
+def _generate_completion_instructions(shell: str, program_name: str) -> str:
+    """Generate shell-specific installation instructions."""
+
+    instructions = {
+        "bash": f"""
+[Bash Completion]
+
+Add this to your ~/.bashrc:
+    eval "$(_{program_name}_COMPLETE=bash_source agent-sandbox)"
+
+Or save the script and source it:
+    _{program_name}_COMPLETE=bash_source agent-sandbox > ~/.agent-sandbox-complete.bash
+    echo 'source ~/.agent-sandbox-complete.bash' >> ~/.bashrc
+
+Then restart your shell or run: source ~/.bashrc
+        """.strip(),
+        "zsh": f"""
+[Zsh Completion]
+
+Add this to your ~/.zshrc:
+    eval "$(_{program_name}_COMPLETE=zsh_source agent-sandbox)"
+
+Or save to completion directory:
+    mkdir -p ~/.zfunc
+    _{program_name}_COMPLETE=zsh_source agent-sandbox > ~/.zfunc/_agent-sandbox
+    echo 'fpath+=~/.zfunc' >> ~/.zshrc
+    echo 'autoload -U compinit && compinit' >> ~/.zshrc
+
+Then restart your shell or run: source ~/.zshrc
+        """.strip(),
+        "fish": f"""
+[Fish Completion]
+
+Save this script:
+    _{program_name}_COMPLETE=fish_source agent-sandbox > ~/.config/fish/completions/agent-sandbox.fish
+
+Then restart fish or run:
+    source ~/.config/fish/completions/agent-sandbox.fish
+        """.strip(),
+    }
+
+    return instructions.get(shell, f"Shell '{shell}' is not supported.")
+
+
+def _install_completion_script(shell: str, program_name: str) -> None:
+    """Install completion script to appropriate location."""
+    home = Path.home()
+
+    # Define installation paths
+    install_paths = {
+        "bash": home / ".bash_completion.d" / "agent-sandbox.bash",
+        "zsh": home / ".zfunc" / "_agent-sandbox",
+        "fish": home / ".config" / "fish" / "completions" / "agent-sandbox.fish",
+    }
+
+    script_path = install_paths[shell]
+
+    # Check if directory exists and is writable
+    if not script_path.parent.exists():
+        try:
+            script_path.parent.mkdir(parents=True, exist_ok=True)
+            console.print(f"[green]Created directory:[/green] {script_path.parent}")
+        except PermissionError:
+            console.print(f"[red]Error:[/red] Cannot create {script_path.parent}")
+            console.print(
+                "[yellow]Try running with sudo or use manual installation:[/yellow]"
+            )
+            console.print(_generate_completion_instructions(shell, program_name))
+            return
+
+    # Generate the completion script using Click's built-in system
+    env_var = f"_{program_name}_COMPLETE={shell}_source"
+
+    try:
+        result = subprocess.run(
+            ["agent-sandbox"],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={**os.environ, env_var: f"{shell}_source"},
+        )
+        script_path.write_text(result.stdout)
+
+        console.print(f"[green]✓[/green] Installed {shell} completion to:")
+        console.print(f"  [dim]{script_path}[/dim]")
+
+        # Provide shell-specific next steps
+        _print_post_install_instructions(shell)
+
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Error:[/red] Failed to generate completion script: {e}")
+    except PermissionError:
+        console.print(f"[red]Error:[/red] Cannot write to {script_path}")
+        console.print(
+            "[yellow]Try running with sudo or use manual installation:[/yellow]"
+        )
+        console.print(_generate_completion_instructions(shell, program_name))
+
+
+def _print_post_install_instructions(shell: str) -> None:
+    """Print shell-specific post-installation instructions."""
+
+    instructions = {
+        "bash": "[yellow]Restart your shell or run:[/yellow] source ~/.bashrc",
+        "zsh": "[yellow]Restart your shell or run:[/yellow] source ~/.zshrc",
+        "fish": "[yellow]Restart fish or run:[/yellow] source ~/.config/fish/completions/agent-sandbox.fish",
+    }
+
+    console.print(instructions.get(shell, "Restart your shell to enable completion."))
+
+
+def _validate_shell_requirements(shell: str) -> None:
+    """Validate shell version requirements and provide helpful warnings."""
+
+    if shell == "bash":
+        try:
+            result = subprocess.run(
+                ["bash", "--version"], capture_output=True, text=True
+            )
+            version_str = result.stdout.split()[2] if result.stdout else ""
+            version_parts = version_str.split(".")
+            if len(version_parts) >= 2:
+                major, minor = int(version_parts[0]), int(version_parts[1])
+                if major < 4 or (major == 4 and minor < 4):
+                    console.print(
+                        f"[yellow]Warning:[/yellow] Bash completion requires version 4.4+. "
+                        f"Found: {major}.{minor}"
+                    )
+        except (subprocess.SubprocessError, IndexError, ValueError):
+            console.print("[yellow]Warning:[/yellow] Could not detect bash version")
+
+
+@main.command()
+@click.argument("shell", required=False, type=click.Choice(["bash", "zsh", "fish"]))
+@click.option(
+    "--install",
+    is_flag=True,
+    help="Install completion script to the appropriate location",
+)
+def completion(shell: str | None, install: bool):
+    """Generate shell completion for agent-sandbox.
+
+    SHELL: Shell type (bash, zsh, fish). Auto-detected if not provided.
+
+    Examples:
+        agent-sandbox completion              # Auto-detect shell and show instructions
+        agent-sandbox completion bash          # Show bash installation instructions
+        agent-sandbox completion fish --install # Auto-install fish completion
+    """
+    program_name = _get_program_name()
+
+    # Auto-detect shell if not provided
+    if not shell:
+        shell = _detect_shell()
+        if not shell:
+            console.print("[red]Error:[/red] Could not detect shell.")
+            console.print("Please specify a shell: bash, zsh, or fish")
+            sys.exit(1)
+        console.print(f"[dim]Detected shell:[/dim] {shell}")
+
+    # Validate shell requirements
+    _validate_shell_requirements(shell)
+
+    if install:
+        _install_completion_script(shell, program_name)
+    else:
+        instructions = _generate_completion_instructions(shell, program_name)
+        console.print(instructions)
+        console.print()
+        console.print(
+            "[dim]Tip:[/dim] Use --install to automatically install the completion script"
+        )
 
 
 if __name__ == "__main__":
